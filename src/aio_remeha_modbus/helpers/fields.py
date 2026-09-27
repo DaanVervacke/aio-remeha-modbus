@@ -2,7 +2,7 @@
 
 from datetime import time
 from enum import IntEnum, IntFlag
-from typing import overload, override
+from typing import Any, overload, override
 
 from modbus_connection import WordOrder
 from modbus_connection.model import (
@@ -385,3 +385,213 @@ def time_steps(address: int, *, writable: bool | WriteValidator = False) -> Time
     """Create a field that contains the time of day in 10-minute steps since midnight."""
 
     return TimeStepsField(address, writable=writable)
+
+
+# GTW26 field types and validators.
+# Values are stored in tenths with the sign in bit 15, so a negative number is
+# not two's complement. 0xFFFF and 0x8CCC mean the sensor is absent.
+
+_SIGN_BIT = 0x8000
+_MAGNITUDE = 0x7FFF
+_NO_SENSOR = frozenset((0xFFFF, 0x8CCC))
+_PROGRAMS = 4
+_DAYS = 7
+
+
+class Float10Field(RegisterField[float | None]):
+    """A value in tenths with a separate sign bit for negative numbers."""
+
+    none_values: tuple[int, ...] = ()
+
+    @override
+    def decode(self, words: list[int], scale_exponent: int | None = None) -> float | None:
+        raw = words[0]
+        if raw in _NO_SENSOR or raw in self.none_values:
+            return None
+        return -(raw & _MAGNITUDE) / 10 if raw >= _SIGN_BIT else raw / 10
+
+    @override
+    def encode(self, value: Any, scale_exponent: int | None = None) -> list[int]:
+        tenths = round(abs(float(value)) * 10)
+        if value < 0:
+            tenths |= _SIGN_BIT
+        return [tenths]
+
+
+def float10(
+    address: int,
+    *,
+    writable: bool | WriteValidator = False,
+    force_fc16: bool = False,
+    unit: str | None = None,
+    none_values: tuple[int, ...] = (),
+) -> Float10Field:
+    """Create a tenths field, optionally recognising extra missing-value codes."""
+    field = Float10Field(address, writable=writable, force_fc16=force_fc16, unit=unit)
+    field.none_values = none_values
+    return field
+
+
+class _MaskedEnum[E: IntEnum]:
+    """Decode known modes and keep unknown mode bits as an integer."""
+
+    def __init__(self, mask: int, enum_type: type[E]) -> None:
+        self.mask = mask
+        self.enum_type = enum_type
+
+    def __call__(self, raw: int) -> E | int:
+        value = raw & self.mask
+        try:
+            return self.enum_type(value)
+        except ValueError:
+            return value
+
+
+def masked_enum[E: IntEnum](address: int, mask: int, enum_type: type[E]) -> NumberField[E | int]:
+    """Read mode bits as a known enum member or an unknown integer code."""
+    return NumberField(address, signed=False, convert=_MaskedEnum(mask, enum_type))
+
+
+class _EnumValue[E: IntEnum]:
+    """Decode an enum while preserving unknown register values."""
+
+    def __init__(self, enum_type: type[E]) -> None:
+        self.enum_type = enum_type
+
+    def __call__(self, raw: int) -> E | int:
+        try:
+            return self.enum_type(raw)
+        except ValueError:
+            return raw
+
+
+def enum_value[E: IntEnum](
+    address: int,
+    enum_type: type[E],
+    *,
+    writable: bool = False,
+    force_fc16: bool = False,
+) -> NumberField[E | int]:
+    """Read an unsigned enum value while preserving unknown values."""
+    return NumberField(
+        address,
+        signed=False,
+        convert=_EnumValue(enum_type),
+        writable=writable,
+        force_fc16=force_fc16,
+    )
+
+
+def scaled_integer(address: int, divisor: int, *, unit: str) -> NumberField[float]:
+    """Read an unsigned integer scaled by a fixed divisor."""
+    return NumberField(address, signed=False, convert=lambda raw: raw / divisor, unit=unit)
+
+
+def multiplied_integer(
+    address: int, multiplier: int, *, unit: str, nan: int | None = None
+) -> NumberField[int]:
+    """Read an unsigned integer multiplied by a fixed factor."""
+    return NumberField(
+        address, signed=False, nan=nan, convert=lambda raw: raw * multiplier, unit=unit
+    )
+
+
+def positive_float10(value: Any) -> float:
+    """Validate a nonnegative tenths value for a controller write."""
+    result = float(value)
+    if not 0.0 <= result <= 10.0:
+        raise ValueError("value must be between 0 and 10 °C")
+    return result
+
+
+class _CodeLabel:
+    """Map a code to its label, an ok code to None, an unknown code to the raw int."""
+
+    def __init__(self, table: dict[int, str], ok: frozenset[int]) -> None:
+        self.table = table
+        self.ok = ok
+
+    def __call__(self, raw: int) -> str | int | None:
+        if raw in self.ok:
+            return None
+        return self.table.get(raw, raw)
+
+
+def fault_code(
+    address: int, table: dict[int, str], *, ok: tuple[int, ...] = (0xFFFF,)
+) -> NumberField[str | int | None]:
+    """Map a fault register to a label, no-fault codes to None, unknown to raw int."""
+    return NumberField(address, signed=False, convert=_CodeLabel(table, frozenset(ok)))
+
+
+def code_map(address: int, table: dict[int, str]) -> NumberField[str | int]:
+    """Map a register to a label from `table`, unknown codes to the raw int."""
+    return NumberField(address, signed=False, convert=_CodeLabel(table, frozenset()))
+
+
+def controller_type_field() -> NumberField[str | int]:
+    """Read register 457 as a controller type label, unknown codes kept as raw ints."""
+    from aio_remeha_modbus.gtw26.const import MODEL_CODES  # noqa: PLC0415
+
+    return code_map(457, MODEL_CODES)
+
+
+class _TimeProgram:
+    """Map a program-selection register to the P1 to P4 program it selects."""
+
+    def __call__(self, raw: int) -> int | None:
+        if raw in _NO_SENSOR:
+            return None
+        return (raw & 0xFF) // _DAYS % _PROGRAMS + 1
+
+
+def time_program(address: int) -> NumberField[int | None]:
+    """Read the selected heating program as a number from 1 to 4."""
+    return NumberField(address, signed=False, convert=_TimeProgram())
+
+
+def snap_clamp(step: float, low: float, high: float) -> WriteValidator:
+    """Round requests to `step` and keep them between `low` and `high`."""
+
+    def validate(value: Any) -> float:
+        snapped = round(float(value) / step) * step
+        return min(max(snapped, low), high)
+
+    return validate
+
+
+def int_clamp(low: int, high: int) -> WriteValidator:
+    """Round requests to a whole number between `low` and `high`."""
+
+    def validate(value: Any) -> int:
+        return min(max(round(float(value)), low), high)
+
+    return validate
+
+
+def permanent_derogation(raw: int) -> bool | None:
+    """Decode verified heating override modes independently of hot-water bits.
+
+    `True` for a permanent day or night override, `False` for automatic mode and
+    temporary overrides, and `None` for modes whose override semantics are unverified.
+    """
+    from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
+
+    mode = raw & HEATING_MODE_MASK
+    if mode in (HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT):
+        return True
+    if mode in (HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT):
+        return False
+    return None
+
+
+def derogation_until_end(raw: int) -> bool | None:
+    """Decode the documented timed-override bit for known heating modes."""
+    from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
+
+    mode = raw & HEATING_MODE_MASK
+    if mode in (HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT):
+        return False
+    if mode in (HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT):
+        return bool(raw & 0x20)
+    return None
