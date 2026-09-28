@@ -70,7 +70,7 @@ class ProbeBlock:
 
     @property
     def outcome(self) -> str:
-        """Return the stable outcome name for this block."""
+        """The stable outcome name for this block."""
         if self.error is None:
             return "success"
         if isinstance(self.error, (IllegalDataAddressError, IllegalFunctionError)):
@@ -79,12 +79,12 @@ class ProbeBlock:
 
     @property
     def error_type(self) -> str | None:
-        """Return the exception class name when the block failed."""
+        """The exception class name when the block failed."""
         return type(self.error).__name__ if self.error is not None else None
 
     @property
     def error_message(self) -> str | None:
-        """Return the exception text when the block failed."""
+        """The exception text when the block failed."""
         return str(self.error) if self.error is not None else None
 
 
@@ -92,7 +92,7 @@ class ProbeBlock:
 class Gtw26Detection:
     """Describe a GTW26 detection attempt and its probe evidence."""
 
-    device: "GTW26 | None"  # noqa: UP037
+    device: GTW26 | None
     raw_type_code: int | None
     generation: ControllerGeneration | None
     isystem_detected: bool
@@ -174,7 +174,7 @@ async def async_detect(unit: ModbusUnit) -> Gtw26Detection:
     raise Gtw26ProbeError(detection)
 
 
-async def async_probe(unit: ModbusUnit) -> "GTW26":  # noqa: UP037
+async def async_probe(unit: ModbusUnit) -> GTW26:
     """Detect the GTW26 layout and return its configured device facade."""
     detection = await async_detect(unit)
     assert detection.device is not None

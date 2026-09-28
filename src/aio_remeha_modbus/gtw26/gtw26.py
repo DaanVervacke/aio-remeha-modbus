@@ -116,17 +116,17 @@ class GTW26(Device):
 
     @property
     def name(self) -> str:
-        """Return the facade name."""
+        """The facade name."""
         return self._name
 
     @property
     def layout(self) -> RegisterLayout | None:
-        """Return the detected or configured register layout."""
+        """The detected or configured register layout."""
         return self._layout
 
     @property
     def generation(self) -> ControllerGeneration | None:
-        """Return the detected or configured controller generation."""
+        """The detected or configured controller generation."""
         return self._generation
 
     async def _async_setup(self) -> None:
@@ -407,7 +407,7 @@ class GTW26(Device):
 
     @property
     def zone_a_present(self) -> bool:
-        """Return whether zone A has a reported sensor or is forced present."""
+        """Whether zone A has a reported sensor or is forced present."""
         if self.climate_zones is None:
             return self._force_zone_a
         zone = self.climate_zones["A"]
@@ -423,7 +423,7 @@ class GTW26(Device):
 
     @property
     def zone_b_present(self) -> bool:
-        """Return whether zone B has a reported sensor or is forced present."""
+        """Whether zone B has a reported sensor or is forced present."""
         if self.climate_zones is None:
             return self._force_zone_b
         zone = self.climate_zones["B"]
@@ -438,7 +438,7 @@ class GTW26(Device):
 
     @property
     def zone_c_present(self) -> bool:
-        """Return whether iSystem zone C has a reported sensor or is forced present."""
+        """Whether iSystem zone C has a reported sensor or is forced present."""
         if self._layout is not RegisterLayout.ISYSTEM or self.climate_zones is None:
             return False
         zone = self.climate_zones["C"]
@@ -450,7 +450,7 @@ class GTW26(Device):
 
     @property
     def hot_water_present(self) -> bool:
-        """Return whether hot water has a reported temperature sensor."""
+        """Whether hot water has a reported temperature sensor."""
         if self.hot_water is None:
             return False
         return bool(

@@ -63,7 +63,7 @@ class WeekProgram(Gtw26Component):
 
     @property
     def week(self) -> WeekSchedule:
-        """Return comfort periods keyed by weekday, from Monday through Sunday."""
+        """Comfort periods keyed by weekday, from Monday through Sunday."""
         days = tuple(getattr(self, field) for field in WEEKDAY_FIELDS)
         return {day + 1: periods or [] for day, periods in enumerate(days)}
 

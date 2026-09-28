@@ -578,9 +578,9 @@ def permanent_derogation(raw: int) -> bool | None:
     from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
 
     mode = raw & HEATING_MODE_MASK
-    if mode in (HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT):
+    if mode in {HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT}:
         return True
-    if mode in (HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT):
+    if mode in {HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT}:
         return False
     return None
 
@@ -590,8 +590,8 @@ def derogation_until_end(raw: int) -> bool | None:
     from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
 
     mode = raw & HEATING_MODE_MASK
-    if mode in (HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT):
+    if mode in {HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT}:
         return False
-    if mode in (HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT):
+    if mode in {HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT}:
         return bool(raw & 0x20)
     return None
