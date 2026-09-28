@@ -1,8 +1,9 @@
 """Modbus helper functions."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from functools import wraps
-from typing import ParamSpec, TypeVar, cast
+from types import CoroutineType
+from typing import Any, ParamSpec, TypeVar, cast, override
 
 from modbus_connection import ModbusUnit
 from typing_extensions import TypeForm
@@ -41,7 +42,7 @@ P = ParamSpec("P")
 
 def retry_on_transient(
     max_tries: int = 3,
-) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+) -> Callable[[Callable[P, CoroutineType[Any, Any, R]]], Callable[P, CoroutineType[Any, Any, R]]]:
     """Retry function execution if a `TransientModbusError` occurs.
 
     Args:
@@ -51,7 +52,9 @@ def retry_on_transient(
 
     """
 
-    def decorator(coro: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    def decorator(
+        coro: Callable[P, CoroutineType[Any, Any, R]],
+    ) -> Callable[P, CoroutineType[Any, Any, R]]:
 
         @wraps(coro)  # noqa: RET503
         async def wrapped_fn(*args: P.args, **kwargs: P.kwargs) -> R:  # pyright: ignore[reportReturnType]
@@ -61,7 +64,7 @@ def retry_on_transient(
                 except Exception as ex:
                     if isinstance(ex, TransientModbusError.__value__):
                         if args and isinstance(args[0], _RetryStatistics):
-                            statistics: _RetryStatistics = cast(_RetryStatistics, args[0])
+                            statistics: _RetryStatistics = args[0]
                             statistics.retried(cast(TypeForm[TransientModbusError], ex))
 
                         if i == max_tries - 1:
@@ -77,7 +80,7 @@ def retry_on_transient(
 class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
     """A `ModbusUnit` that retries requests on failure.
 
-    Only methods decorated with `@async_retry()` are retried on failure.
+    Only methods decorated with `@retry_on_transient()` are retried on failure.
     This class wraps a provided `ModbusUnit`.
     """
 
@@ -99,6 +102,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         return self._unit.connected
 
     @retry_on_transient()
+    @override
     async def read_holding_registers(self, address: int, count: int) -> list[int]:
         """Read holding registers (FC03).
 
@@ -113,6 +117,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         return await self._unit.read_holding_registers(address, count)
 
     @retry_on_transient()
+    @override
     async def read_input_registers(self, address: int, count: int) -> list[int]:
         """Read input registers (FC04).
 
@@ -126,6 +131,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_input_registers(address, count)
 
+    @override
     async def write_register(self, address: int, value: int) -> None:
         """Write a single register value.
 
@@ -139,6 +145,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.write_register(address, value)
 
+    @override
     async def write_registers(self, address: int, values: list[int]) -> None:
         """Write to a set of sequential registers.
 
@@ -153,6 +160,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         return await self._unit.write_registers(address, values)
 
     @retry_on_transient()
+    @override
     async def read_coils(self, address: int, count: int) -> list[bool]:
         """Read a sequential set of coil registers.
 
@@ -167,6 +175,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         return await self._unit.read_coils(address, count)
 
     @retry_on_transient()
+    @override
     async def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
         """Read a sequential set of discrete input registers.
 
@@ -180,6 +189,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_discrete_inputs(address, count)
 
+    @override
     async def write_coil(self, address: int, value: bool) -> None:
         """Write to a single coil register.
 
@@ -193,6 +203,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.write_coil(address, value)
 
+    @override
     async def write_coils(self, address: int, values: list[bool]) -> None:
         """Write to a sequential set of coil registers.
 
@@ -207,6 +218,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.write_coils(address, values)
 
+    @override
     async def read_exception_status(self) -> int:
         """Read the exception status (F0x07) from the modbus device.
 
@@ -221,6 +233,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_exception_status()
 
+    @override
     async def report_server_id(self) -> bytes:
         """Read the server id (F0x11).
 
@@ -233,6 +246,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.report_server_id()
 
+    @override
     async def mask_write_register(self, address: int, and_mask: int, or_mask: int) -> None:
         """Mask write register (F0x16).
 
@@ -251,6 +265,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.mask_write_register(address, and_mask, or_mask)
 
+    @override
     async def read_write_registers(
         self, read_address: int, read_count: int, write_address: int, write_values: list[int]
     ) -> list[int]:
@@ -267,6 +282,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
             read_address, read_count, write_address, write_values
         )
 
+    @override
     async def read_fifo_queue(self, address: int) -> list[int]:
         """Read FIFO queue (F0x18).
 
@@ -282,6 +298,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_fifo_queue(address)
 
+    @override
     async def read_device_identification(self) -> dict[int, bytes]:
         """Read device identificatio (F0x2B/F0x0E).
 
@@ -297,6 +314,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_device_identification()
 
+    @override
     async def read_file_record(self, file: int, record: int, length: int) -> list[int]:
         """Read file record (F0x14).
 
@@ -306,6 +324,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.read_file_record(file, record, length)
 
+    @override
     async def write_file_record(self, file: int, record: int, values: list[int]) -> None:
         """Write file record (F0x15).
 
@@ -315,6 +334,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.write_file_record(file, record, values)
 
+    @override
     async def diagnostics(self, sub_function: int, data: int = 0) -> int:
         """Send a sub-function code with one data word.
 
@@ -324,6 +344,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.diagnostics(sub_function, data)
 
+    @override
     async def get_comm_event_counter(self) -> tuple[bool, int]:
         """Get comm event counter (F0x0B).
 
@@ -340,6 +361,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.get_comm_event_counter()
 
+    @override
     async def get_comm_event_log(self) -> bytes:
         """Get comm event log (F0x0C).
 
@@ -353,6 +375,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return await self._unit.get_comm_event_log()
 
+    @override
     def set_message_spacing(self, seconds: float) -> None:
         """Set the minimum interval between requests to this unit.
 
@@ -362,6 +385,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return self._unit.set_message_spacing(seconds)
 
+    @override
     def require_timeout(self, seconds: float | None) -> None:
         """Ask the link of a per-request timeout of at least `seconds`.
 
@@ -371,6 +395,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return self._unit.require_timeout(seconds)
 
+    @override
     def require_connect_delay(self, seconds: float | None) -> None:
         """Ask the link for a pause of at least `seconds` after it opens.
 
@@ -383,6 +408,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return self._unit.require_connect_delay(seconds)
 
+    @override
     def on_connection_lost(self, callback: Callable[[], None]) -> Callable[[], None]:
         """Register a callback when the connection's link drops.
 
@@ -392,6 +418,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
         """
         return self._unit.on_connection_lost(callback)
 
+    @override
     async def disconnect(self) -> None:
         """`async`. Drop the owning connection's link."""
         return await self._unit.disconnect()
