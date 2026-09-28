@@ -1,6 +1,6 @@
 [project]
 name = "aio-remeha-modbus"
-version = "3.0.1"
+version = "4.0.0"
 description = "Async I/O modbus API for Remeha appliances"
 readme = "README.md"
 authors = [
@@ -37,7 +37,7 @@ dev = [
     "build>=1.5.0",
     "freezegun>=1.5.5",
     "modbus-connection[tmodbus]~=4.12.1",
-    "pre-commit>=4.6.0",
+    "prek>=0.5.4",
     "pyclean>=3.7.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -54,6 +54,7 @@ docs = [
 omit = ["tests/*"]
 
 [tool.ruff]
+preview = true # Markdown formatting
 line-length = 100
 
 [tool.ruff.lint]

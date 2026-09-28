@@ -63,9 +63,9 @@ def remeha_modbus_unit(request, mock_modbus_unit: MockModbusUnit) -> ModbusUnit:
 
     json_file = request.param if hasattr(request, "param") else "modbus_store.json"
     store: dict[str, str] = json_fixture(json_file)["server"]["registers"]
-    mock_modbus_unit.load_raw(
-        {"holding": {int(key): int(value, 16) for key, value in store.items()}}
-    )
+    mock_modbus_unit.load_raw({
+        "holding": {int(key): int(value, 16) for key, value in store.items()}
+    })
 
     return mock_modbus_unit
 

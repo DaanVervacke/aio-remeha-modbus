@@ -44,8 +44,10 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
-      - name: ruff
-        uses: astral-sh/ruff-action@v4.1.0
+      - name: prek
+        uses: j178/prek-action@v3.0.0
+        with:
+          extra-args: "--all-files"
 
       - name: pytest
         id: run_pytest

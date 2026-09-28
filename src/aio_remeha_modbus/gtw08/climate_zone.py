@@ -67,17 +67,17 @@ class ClimateZoneFunction(IntEnum):
 
     def is_supported(self) -> bool:
         """Return whether this `ClimateZoneFunction` is currently supported within this integration."""
-        return self in [
+        return self in {
             ClimateZoneFunction.MIXING_CIRCUIT,
             ClimateZoneFunction.DHW_PRIMARY,
-        ]
+        }
 
     def has_cooling_capability(self) -> bool:
         """Return whether this `ClimateZoneFunction` supports cooling."""
-        return self in [
+        return self in {
             ClimateZoneFunction.MIXING_CIRCUIT,
             ClimateZoneFunction.FAN_CONVECTOR,
-        ]
+        }
 
 
 class ClimateZoneMode(IntEnum):
@@ -159,14 +159,14 @@ def is_domestic_hot_water(type: ClimateZoneType, function: ClimateZoneFunction) 
     return type == ClimateZoneType.DHW or (
         type == ClimateZoneType.OTHER
         and function
-        in [
+        in {
             ClimateZoneFunction.DHW_BIC,
             ClimateZoneFunction.DHW_COMMERCIAL_TANK,
             ClimateZoneFunction.DHW_LAYERED,
             ClimateZoneFunction.DHW_PRIMARY,
             ClimateZoneFunction.DHW_TANK,
             ClimateZoneFunction.ELECTRICAL_DHW_TANK,
-        ]
+        }
     )
 
 
@@ -177,13 +177,13 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
     is available (yet).
     """
 
-    return type in [
+    return type in {
         ClimateZoneType.CH_ONLY,
         ClimateZoneType.CH_AND_COOLING,
-    ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
+    } or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
 
 
-class ClimateZone(RemehaComponent):
+class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Defines a climate zone following the GTW-08 parameter list.
 
     In the GTW-08 parameter list, a climate zone contains all fields for all zone types.
@@ -329,7 +329,7 @@ class ClimateZone(RemehaComponent):
 
     @property
     def selected_schedule(self) -> ClimateZoneScheduleId | None:
-        """Return the mapped selected schedule.
+        """The mapped selected schedule.
 
         Remeha stores the cooling schedule in schedule 4, but writing that to
         `selected_schedule` raises an exception since it only allows the values
@@ -354,7 +354,7 @@ class ClimateZone(RemehaComponent):
 
     @property
     def current_schedule(self) -> dict[Weekday, list[Timeslot] | None]:
-        """Return the selected schedule.
+        """The selected schedule.
 
         If no schedule was selected, this method returns the dict with all
         time slots set to `None`.
@@ -369,7 +369,7 @@ class ClimateZone(RemehaComponent):
 
     @property
     def temporary_room_setpoint_end_time(self) -> datetime | None:
-        """Get the end time of the temporary room setpoint override.
+        """The end time of the temporary room setpoint override.
 
         The returned `datetime` is in the configured time zone of `self.time_zone`.
         """
@@ -483,7 +483,7 @@ class ClimateZone(RemehaComponent):
 
     @property
     def current_setpoint(self) -> float | None:
-        """Return the current setpoint of this zone.
+        """The current setpoint of this zone.
 
         The actual returned setpoint field depends on the type of zone and
         the current zone mode.
@@ -515,7 +515,7 @@ class ClimateZone(RemehaComponent):
 
     @property
     def current_temparature(self) -> float:
-        """Return the current temperature of this zone.
+        """The current temperature of this zone.
 
         The actual returned temperature field depends on the type of zone.
         """

@@ -20,7 +20,7 @@ from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
 
 
-async def main() -> int:  # noqa: D103
+async def main() -> int:  # noqa: D103  # ruff: ignore[too-many-locals]
     parser = argparse.ArgumentParser(description="Query a device and print values.")
     add_connection_args(parser)
 

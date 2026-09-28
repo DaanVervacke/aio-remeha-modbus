@@ -167,13 +167,11 @@ def _forecast(irradiance_by_hour: dict[int, int] | None = None, *, last_hour: in
     return WeatherForecast(
         unit_of_temperature=UnitOfTemperature.CELSIUS,
         forecasts=[
-            HourlyForecast.from_dict(
-                {
-                    "datetime": f"2026-06-02T{hour:02d}:00:00+02:00",
-                    "temperature": 20.0,
-                    "solar_irradiance": irradiance_by_hour.get(hour, 0),
-                }
-            )
+            HourlyForecast.from_dict({
+                "datetime": f"2026-06-02T{hour:02d}:00:00+02:00",
+                "temperature": 20.0,
+                "solar_irradiance": irradiance_by_hour.get(hour, 0),
+            })
             for hour in range(last_hour + 1)
         ],
     )
@@ -226,14 +224,12 @@ def _schedule(
 def test_hourly_forecast_from_dict():
     """Test that a forecast is created from a weather forecast entry."""
 
-    forecast = HourlyForecast.from_dict(
-        {
-            "datetime": "2026-06-02T13:00:00+02:00",
-            "temperature": "21.5",
-            "solar_irradiance": "640",
-            "condition": "sunny",
-        }
-    )
+    forecast = HourlyForecast.from_dict({
+        "datetime": "2026-06-02T13:00:00+02:00",
+        "temperature": "21.5",
+        "solar_irradiance": "640",
+        "condition": "sunny",
+    })
 
     assert forecast.start_time == datetime(2026, 6, 2, 13, tzinfo=timezone(timedelta(hours=2)))
     assert forecast.temperature == 21.5
