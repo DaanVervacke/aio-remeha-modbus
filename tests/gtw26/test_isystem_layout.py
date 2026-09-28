@@ -426,7 +426,7 @@ async def test_isystem_hot_water_zero_temperature_counts_as_present(mock_modbus_
 async def test_isystem_heating_mode_writes_to_zone_b_register(mock_modbus_unit):
     mock_modbus_unit.holding[659] = 0x58
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.set_heating_mode("B", HeatingMode.TEMP_NIGHT)
+    await boiler.async_set_heating_mode("B", HeatingMode.TEMP_NIGHT)
     word = mock_modbus_unit.holding[659]
     assert word & 0x2F == int(HeatingMode.TEMP_NIGHT)
     assert word & 0x50 == int(HotWaterMode.TEMP)
@@ -438,7 +438,7 @@ async def test_isystem_heating_mode_writes_to_zone_b_register(mock_modbus_unit):
 async def test_isystem_hot_water_mode_writes_to_zone_b_register(mock_modbus_unit):
     mock_modbus_unit.holding[659] = 0x08
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.set_hot_water_mode(HotWaterMode.PERM)
+    await boiler.async_set_hot_water_mode(HotWaterMode.PERM)
     word = mock_modbus_unit.holding[659]
     assert word & 0x50 == int(HotWaterMode.PERM)
     assert word & 0x2F == int(HeatingMode.AUTO)
@@ -448,14 +448,14 @@ async def test_isystem_hot_water_mode_writes_to_zone_b_register(mock_modbus_unit
 async def test_isystem_circuit_c_mode_writes_to_667(mock_modbus_unit):
     mock_modbus_unit.holding[667] = 0x08
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.set_heating_mode("C", HeatingMode.TEMP_DAY)
+    await boiler.async_set_heating_mode("C", HeatingMode.TEMP_DAY)
     assert mock_modbus_unit.holding[667] & 0x2F == int(HeatingMode.TEMP_DAY)
 
 
 @pytest.mark.asyncio
 async def test_isystem_mode_write_does_not_nudge_panel(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
-    await boiler.set_heating_mode("B", HeatingMode.AUTO)
+    await boiler.async_set_heating_mode("B", HeatingMode.AUTO)
     assert 13 not in mock_modbus_unit.holding
 
 
@@ -578,7 +578,7 @@ async def test_isystem_set_day_refreshes_cached_schedule(mock_modbus_unit):
     await boiler.async_update()
     assert boiler.schedule.get_week("circuit_b_p4")[1] == [(time(8, 0), time(9, 0))]
 
-    await boiler.schedule.set_day("circuit_b_p4", 1, [(time(10, 0), time(11, 0))])
+    await boiler.schedule.async_set_day("circuit_b_p4", 1, [(time(10, 0), time(11, 0))])
     await boiler.async_update()
 
     assert boiler.schedule.get_week("circuit_b_p4")[1] == [(time(10, 0), time(11, 0))]

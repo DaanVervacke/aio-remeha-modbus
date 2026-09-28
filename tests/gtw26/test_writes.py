@@ -83,7 +83,7 @@ async def test_summer_winter_snaps_and_clamps(mock_modbus_unit):
 @pytest.mark.asyncio
 async def test_set_clock_writes_blocks_with_marker(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit)
-    await diematic.set_clock(datetime(2026, 9, 4, 14, 5))
+    await diematic.async_set_clock(datetime(2026, 9, 4, 14, 5))
     assert mock_modbus_unit.holding[4] == 0xFF00 | 14
     assert mock_modbus_unit.holding[5] == 0xFF00 | 5
     assert mock_modbus_unit.holding[6] == 0xFF00 | 5
@@ -172,7 +172,7 @@ async def test_isystem_set_day_writes_requested_three_register_block(
     mock_modbus_unit.holding.update({231: 0x2000, 232: 0x2023, 233: 0x2038})
     boiler = isystem_gtw26(mock_modbus_unit)
 
-    await boiler.schedule.set_day(schedule, weekday, [(time(8, 0), time(9, 0))])
+    await boiler.schedule.async_set_day(schedule, weekday, [(time(8, 0), time(9, 0))])
 
     start = base + 3 * (weekday - 1)
     assert [mock_modbus_unit.holding[address] for address in range(start, start + 3)] == [
@@ -190,7 +190,7 @@ async def test_isystem_set_day_writes_requested_three_register_block(
 @pytest.mark.asyncio
 async def test_isystem_schedules_set_day_facade_writes(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.schedule.set_day("circuit_b_p4", 1, [(time(8, 0), time(9, 0))])
+    await boiler.schedule.async_set_day("circuit_b_p4", 1, [(time(8, 0), time(9, 0))])
     assert [mock_modbus_unit.holding[a] for a in range(147, 150)] == [0x0, 0xC000, 0x0]
 
 
@@ -198,7 +198,7 @@ async def test_isystem_schedules_set_day_facade_writes(mock_modbus_unit):
 async def test_isystem_schedules_set_day_rejects_unknown_schedule(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
     with pytest.raises(ValueError, match="unknown schedule"):
-        await boiler.schedule.set_day("nope", 1, [])
+        await boiler.schedule.async_set_day("nope", 1, [])
 
 
 @pytest.mark.asyncio
@@ -216,7 +216,7 @@ async def test_isystem_schedules_read_paths_reject_unknown_schedule(mock_modbus_
 async def test_isystem_set_day_rejects_bad_weekday(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
     with pytest.raises(ValueError, match="weekday"):
-        await boiler.schedule.set_day("circuit_b_p4", 0, [])
+        await boiler.schedule.async_set_day("circuit_b_p4", 0, [])
 
 
 def test_schedule_day_encode_rejects_reversed_period():
@@ -227,7 +227,7 @@ def test_schedule_day_encode_rejects_reversed_period():
 @pytest.mark.asyncio
 async def test_isystem_set_clock_writes_plain_block(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.set_clock(datetime(2026, 9, 4, 14, 5))
+    await boiler.async_set_clock(datetime(2026, 9, 4, 14, 5))
     written = [mock_modbus_unit.holding[a] for a in range(679, 685)]
     assert written == [14, 5, 5, 4, 9, 26]
 
@@ -250,7 +250,7 @@ async def test_zone_setpoint_half_degree_step(mock_modbus_unit):
 async def test_setting_heating_mode_preserves_hot_water_bits(mock_modbus_unit):
     mock_modbus_unit.holding[17] = 0x58
     diematic = base_gtw26(mock_modbus_unit)
-    await diematic.set_heating_mode("A", HeatingMode.TEMP_DAY)
+    await diematic.async_set_heating_mode("A", HeatingMode.TEMP_DAY)
     word = mock_modbus_unit.holding[17]
     assert word & 0x2F == int(HeatingMode.TEMP_DAY)
     assert word & 0x50 == int(HotWaterMode.TEMP)
@@ -260,7 +260,7 @@ async def test_setting_heating_mode_preserves_hot_water_bits(mock_modbus_unit):
 async def test_setting_hot_water_mode_preserves_heating_bits(mock_modbus_unit):
     mock_modbus_unit.holding[17] = 0x58
     diematic = base_gtw26(mock_modbus_unit)
-    await diematic.set_hot_water_mode(HotWaterMode.PERM)
+    await diematic.async_set_hot_water_mode(HotWaterMode.PERM)
     word = mock_modbus_unit.holding[17]
     assert word & 0x50 == int(HotWaterMode.PERM)
     assert word & 0x2F == int(HeatingMode.AUTO)
@@ -271,7 +271,7 @@ async def test_base_hot_water_mode_mirrors_into_registers_17_and_26(mock_modbus_
     mock_modbus_unit.holding[17] = 0x01
     mock_modbus_unit.holding[26] = 0x08
     diematic = base_gtw26(mock_modbus_unit)
-    await diematic.set_hot_water_mode(HotWaterMode.PERM)
+    await diematic.async_set_hot_water_mode(HotWaterMode.PERM)
     assert mock_modbus_unit.holding[17] & 0x50 == int(HotWaterMode.PERM)
     assert mock_modbus_unit.holding[26] & 0x50 == int(HotWaterMode.PERM)
     assert mock_modbus_unit.holding[17] & 0x2F == 0x01
@@ -292,7 +292,7 @@ async def test_base_hot_water_mode_reads_both_before_writing_either(mock_modbus_
 
     mock_modbus_unit.on_write(record)
     diematic = base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_3)
-    await diematic.set_hot_water_mode(HotWaterMode.PERM)
+    await diematic.async_set_hot_water_mode(HotWaterMode.PERM)
     assert reads_seen_at_first_write == [17, 26]
     assert writes == [17, 26]
 
@@ -303,7 +303,7 @@ async def test_isystem_hot_water_mode_writes_single_register(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
     writes: list[int] = []
     mock_modbus_unit.on_write(lambda e: writes.append(e.address))
-    await boiler.set_hot_water_mode(HotWaterMode.PERM)
+    await boiler.async_set_hot_water_mode(HotWaterMode.PERM)
     assert writes == [659]
     assert mock_modbus_unit.holding[659] & 0x50 == int(HotWaterMode.PERM)
 
@@ -333,7 +333,7 @@ async def test_isystem_circuit_min_max_write_plain(mock_modbus_unit):
 @pytest.mark.asyncio
 async def test_diematic3_does_not_nudge_panel(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_3)
-    await diematic.set_heating_mode("A", HeatingMode.AUTO)
+    await diematic.async_set_heating_mode("A", HeatingMode.AUTO)
     assert 13 not in mock_modbus_unit.holding
 
 
@@ -344,7 +344,7 @@ async def test_diematic4_nudges_panel(mock_modbus_unit, monkeypatch):
 
     monkeypatch.setattr("aio_remeha_modbus.gtw26.gtw26.asyncio.sleep", _no_sleep)
     diematic = base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
-    await diematic.set_heating_mode("A", HeatingMode.AUTO)
+    await diematic.async_set_heating_mode("A", HeatingMode.AUTO)
     assert mock_modbus_unit.holding[13] == 0
 
 
@@ -375,7 +375,7 @@ async def test_unsupported_heating_mode_rejected_before_io(
     writes = []
     mock_modbus_unit.on_write(writes.append)
     with pytest.raises(ValueError):
-        await boiler.set_heating_mode(designation, mode)
+        await boiler.async_set_heating_mode(designation, mode)
     assert mock_modbus_unit.read_events == []
     assert writes == []
 
@@ -387,7 +387,7 @@ async def test_unknown_hot_water_mode_rejected_before_io(mock_modbus_unit, regul
     writes = []
     mock_modbus_unit.on_write(writes.append)
     with pytest.raises(ValueError):
-        await boiler.set_hot_water_mode(64)
+        await boiler.async_set_hot_water_mode(64)
     assert mock_modbus_unit.read_events == []
     assert writes == []
 
@@ -398,7 +398,7 @@ async def test_unknown_hot_water_mode_rejected_before_io(mock_modbus_unit, regul
 async def test_hot_water_write_preserves_holiday(mock_modbus_unit, regulator_type, address, mode):
     mock_modbus_unit.holding[address] = 0xA1
     boiler = regulator_type(mock_modbus_unit)
-    await boiler.set_hot_water_mode(mode)
+    await boiler.async_set_hot_water_mode(mode)
     assert mock_modbus_unit.holding[address] == 0xA1 | int(mode)
 
 
@@ -407,7 +407,7 @@ async def test_hot_water_write_preserves_holiday(mock_modbus_unit, regulator_typ
 async def test_known_heating_modes_preserve_unknown_hot_water_bits(mock_modbus_unit, mode):
     mock_modbus_unit.holding[659] = 0xC8
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.set_heating_mode("B", mode)
+    await boiler.async_set_heating_mode("B", mode)
     assert mock_modbus_unit.holding[659] == 0xC0 | int(mode)
 
 

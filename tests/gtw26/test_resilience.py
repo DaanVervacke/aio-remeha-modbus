@@ -291,8 +291,8 @@ async def test_concurrent_mode_writes_are_serialised(mock_modbus_unit):
     mock_modbus_unit.read_holding_registers = yielding_read
     mock_modbus_unit.write_registers = yielding_write
     await asyncio.gather(
-        boiler.set_heating_mode("B", HeatingMode.TEMP_DAY),
-        boiler.set_hot_water_mode(HotWaterMode.PERM),
+        boiler.async_set_heating_mode("B", HeatingMode.TEMP_DAY),
+        boiler.async_set_hot_water_mode(HotWaterMode.PERM),
     )
     word = mock_modbus_unit.holding[659]
     assert word & 0x2F == int(HeatingMode.TEMP_DAY)

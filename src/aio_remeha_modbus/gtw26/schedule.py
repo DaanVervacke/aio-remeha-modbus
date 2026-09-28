@@ -109,6 +109,6 @@ class ScheduleFacade:
         """Return all weekdays from a named schedule."""
         return self._require_schedule(schedule).week
 
-    async def set_day(self, schedule: str, weekday: int, periods: DaySchedule) -> None:
+    async def async_set_day(self, schedule: str, weekday: int, periods: DaySchedule) -> None:
         """Write one weekday of a named schedule."""
         await self._require_schedule(schedule).async_set_day(weekday, periods)

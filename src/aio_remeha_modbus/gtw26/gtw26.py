@@ -349,7 +349,7 @@ class GTW26(Device):
             return ISYSTEM_POLICY
         raise RuntimeError("GTW26 layout has not been set up")
 
-    async def set_heating_mode(self, designation: str, mode: HeatingMode) -> None:
+    async def async_set_heating_mode(self, designation: str, mode: HeatingMode) -> None:
         """Set one heating circuit mode while preserving hot-water bits."""
         validated = HeatingMode(mode)
         if validated is HeatingMode.HOLIDAY:
@@ -365,7 +365,7 @@ class GTW26(Device):
             if policy.nudges_panel and self._generation is ControllerGeneration.GENERATION_4:
                 await self._nudge_panel()
 
-    async def set_hot_water_mode(self, mode: HotWaterMode) -> None:
+    async def async_set_hot_water_mode(self, mode: HotWaterMode) -> None:
         """Set hot-water mode while preserving heating-circuit bits."""
         validated = HotWaterMode(mode)
         await self.async_ensure_setup()
@@ -382,7 +382,7 @@ class GTW26(Device):
             if policy.nudges_panel and self._generation is ControllerGeneration.GENERATION_4:
                 await self._nudge_panel()
 
-    async def set_clock(self, moment: datetime) -> None:
+    async def async_set_clock(self, moment: datetime) -> None:
         """Set the controller clock using the selected layout's clock policy."""
         await self.async_ensure_setup()
         policy = self._policy().clock
