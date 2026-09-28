@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 from datetime import time
-from itertools import starmap
 
 from dateutil.tz import gettz
 from modbus_connection import ModbusError
@@ -26,7 +25,8 @@ from aio_remeha_modbus.gtw26 import (
     RegisterLayout,
     ScheduleFacade,
 )
-from aio_remeha_modbus.gtw26.const import MESSAGE_SPACING
+from aio_remeha_modbus.gtw26.const import MESSAGE_SPACING, Weekday
+from aio_remeha_modbus.gtw26.schedule import ComfortPeriod
 from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
 
 
@@ -107,22 +107,13 @@ def _print_section(component: Component | None, title: str) -> None:
     print_component(component, title=title)
 
 
-_WEEKDAYS = (
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-)
 _MIDNIGHT = time(0, 0)
 
 
-def _format_range(start: time, end: time) -> str:
+def _format_range(period: ComfortPeriod) -> str:
     """Format one comfort period, showing a midnight end as 24:00."""
-    tail = "24:00" if end == _MIDNIGHT else end.strftime("%H:%M")
-    return f"{start.strftime('%H:%M')}-{tail}"
+    tail = "24:00" if period.end == _MIDNIGHT else period.end.strftime("%H:%M")
+    return f"{period.start.strftime('%H:%M')}-{tail}"
 
 
 def _print_schedule_sections(schedule: ScheduleFacade | None) -> None:
@@ -137,10 +128,10 @@ def _print_schedule_sections(schedule: ScheduleFacade | None) -> None:
         print("\n")  # noqa: T201
         print(title)  # noqa: T201
         print("-" * len(title))  # noqa: T201
-        for day in range(1, 8):
-            ranges = week.get(day, [])
-            shown = ", ".join(starmap(_format_range, ranges)) or ("no comfort periods")
-            print(f"  {_WEEKDAYS[day - 1].ljust(9)}  {shown}")  # noqa: T201
+        for weekday in Weekday:
+            ranges = week.get(weekday, [])
+            shown = ", ".join(_format_range(period) for period in ranges) or ("no comfort periods")
+            print(f"  {weekday.name.capitalize().ljust(9)}  {shown}")  # noqa: T201
 
 
 def _print_gtw26_sections(device: GTW26, args: argparse.Namespace) -> None:

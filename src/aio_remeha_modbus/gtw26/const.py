@@ -101,6 +101,22 @@ class ControllerGeneration(IntEnum):
     """iSystem generation (type code 24). Base mode writes nudge the panel."""
 
 
+class Weekday(IntEnum):
+    """Days of the week, Monday-first and zero-based.
+
+    The values match `gtw08.const.Weekday` so callers can use one key type
+    for both gateways, while the packages stay independent.
+    """
+
+    MONDAY = 0
+    TUESDAY = 1
+    WEDNESDAY = 2
+    THURSDAY = 3
+    FRIDAY = 4
+    SATURDAY = 5
+    SUNDAY = 6
+
+
 class HeatingMode(IntEnum):
     """Heating-circuit mode held in the low bits of a mode register."""
 

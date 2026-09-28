@@ -109,4 +109,5 @@ which optional components answered on the controller.
 
 ### GTW-26 schedules
 Weekly comfort schedules are available through `GTW26.schedule` as a `ScheduleFacade`.
-`GTW26.schedule.get_week("hot_water")` returns the comfort periods for each weekday.
+`GTW26.schedule.get_week("hot_water")` returns the `ComfortPeriod` slots for each day, keyed by the
+zero-based, Monday-first `Weekday` enum. A period ending at `time(0, 0)` runs to the end of the day.

@@ -21,7 +21,9 @@ from aio_remeha_modbus.gtw26.const import (
     SCHEDULE_BASES,
     ControllerGeneration,
     RegisterLayout,
+    Weekday,
 )
+from aio_remeha_modbus.gtw26.schedule import ComfortPeriod
 
 
 def _seed(unit: MockModbusUnit) -> None:
@@ -488,17 +490,21 @@ async def test_isystem_schedule_decodes_comfort_ranges(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     week = boiler.schedule.get_week("circuit_a_p4")
-    assert week[1] == [(time(6, 0), time(8, 30))]
-    assert week[2] == [(time(22, 0), time(0, 0))]
-    assert week[3] == []
-    assert boiler.schedule.get_week("circuit_b_p4")[1] == [(time(7, 0), time(20, 0))]
-    assert boiler.schedule.get_week("hot_water")[1] == [
-        (time(3, 0), time(9, 0)),
-        (time(11, 30), time(12, 30)),
-        (time(16, 0), time(22, 30)),
+    assert week[Weekday.MONDAY] == [ComfortPeriod(time(6, 0), time(8, 30))]
+    assert week[Weekday.TUESDAY] == [ComfortPeriod(time(22, 0), time(0, 0))]
+    assert week[Weekday.WEDNESDAY] == []
+    assert boiler.schedule.get_week("circuit_b_p4")[Weekday.MONDAY] == [
+        ComfortPeriod(time(7, 0), time(20, 0))
     ]
-    assert boiler.schedule.get_week("auxiliary")[1] == [(time(6, 0), time(22, 0))]
-    assert boiler.schedule.get_week("circuit_c_p4")[7] == []
+    assert boiler.schedule.get_week("hot_water")[Weekday.MONDAY] == [
+        ComfortPeriod(time(3, 0), time(9, 0)),
+        ComfortPeriod(time(11, 30), time(12, 30)),
+        ComfortPeriod(time(16, 0), time(22, 30)),
+    ]
+    assert boiler.schedule.get_week("auxiliary")[Weekday.MONDAY] == [
+        ComfortPeriod(time(6, 0), time(22, 0))
+    ]
+    assert boiler.schedule.get_week("circuit_c_p4")[Weekday.SUNDAY] == []
 
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
@@ -519,16 +525,16 @@ async def test_isystem_schedule_decodes_all_on_and_all_off_days(mock_modbus_unit
     await boiler.schedule.async_update(schedule)
 
     assert boiler.schedule.get_week(schedule) == {
-        1: [(time(0, 0), time(0, 0))],
-        2: [],
-        3: [],
-        4: [],
-        5: [],
-        6: [],
-        7: [],
+        Weekday.MONDAY: [ComfortPeriod(time(0, 0), time(0, 0))],
+        Weekday.TUESDAY: [],
+        Weekday.WEDNESDAY: [],
+        Weekday.THURSDAY: [],
+        Weekday.FRIDAY: [],
+        Weekday.SATURDAY: [],
+        Weekday.SUNDAY: [],
     }
-    assert boiler.schedule.get_day(schedule, 1) == [(time(0, 0), time(0, 0))]
-    assert boiler.schedule.get_day(schedule, 2) == []
+    assert boiler.schedule.get_day(schedule, Weekday.MONDAY) == [ComfortPeriod(time(0, 0), time(0, 0))]
+    assert boiler.schedule.get_day(schedule, Weekday.TUESDAY) == []
 
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
@@ -551,9 +557,9 @@ async def test_isystem_schedule_decodes_adjacent_days_independently(
     await boiler.schedule.async_update(schedule)
 
     week = boiler.schedule.get_week(schedule)
-    assert week[1] == [(time(0, 0), time(0, 30))]
-    assert week[2] == [(time(0, 30), time(1, 0))]
-    assert all(not week[day] for day in range(3, 8))
+    assert week[Weekday.MONDAY] == [ComfortPeriod(time(0, 0), time(0, 30))]
+    assert week[Weekday.TUESDAY] == [ComfortPeriod(time(0, 30), time(1, 0))]
+    assert all(not week[day] for day in list(Weekday)[2:])
 
 
 @pytest.mark.asyncio
@@ -576,12 +582,18 @@ async def test_isystem_set_day_refreshes_cached_schedule(mock_modbus_unit):
     mock_modbus_unit.holding.update({147: 0x0000, 148: 0xC000, 149: 0x0000})
     boiler = isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
-    assert boiler.schedule.get_week("circuit_b_p4")[1] == [(time(8, 0), time(9, 0))]
+    assert boiler.schedule.get_week("circuit_b_p4")[Weekday.MONDAY] == [
+        ComfortPeriod(time(8, 0), time(9, 0))
+    ]
 
-    await boiler.schedule.async_set_day("circuit_b_p4", 1, [(time(10, 0), time(11, 0))])
+    await boiler.schedule.async_set_day(
+        "circuit_b_p4", Weekday.MONDAY, [ComfortPeriod(time(10, 0), time(11, 0))]
+    )
     await boiler.async_update()
 
-    assert boiler.schedule.get_week("circuit_b_p4")[1] == [(time(10, 0), time(11, 0))]
+    assert boiler.schedule.get_week("circuit_b_p4")[Weekday.MONDAY] == [
+        ComfortPeriod(time(10, 0), time(11, 0))
+    ]
 
 
 @pytest.mark.asyncio

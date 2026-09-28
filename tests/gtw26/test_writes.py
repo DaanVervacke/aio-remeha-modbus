@@ -9,8 +9,13 @@ from aio_remeha_modbus.gtw26 import (
     HotWaterPriority,
     NightMode,
 )
-from aio_remeha_modbus.gtw26.const import SCHEDULE_BASES, ControllerGeneration, RegisterLayout
-from aio_remeha_modbus.gtw26.schedule import ScheduleDayField, WeekProgram
+from aio_remeha_modbus.gtw26.const import (
+    SCHEDULE_BASES,
+    ControllerGeneration,
+    RegisterLayout,
+    Weekday,
+)
+from aio_remeha_modbus.gtw26.schedule import ComfortPeriod, ScheduleDayField, WeekProgram
 from aio_remeha_modbus.helpers.gtw26 import decode_day
 
 
@@ -159,12 +164,12 @@ def test_schedule_day_encode_round_trips():
 @pytest.mark.asyncio
 async def test_isystem_set_day_writes_three_words(mock_modbus_unit):
     program = WeekProgram(mock_modbus_unit, base_offset=147)
-    await program.async_set_day(1, [(time(8, 0), time(9, 0))])
+    await program.async_set_day(Weekday.MONDAY, [ComfortPeriod(time(8, 0), time(9, 0))])
     assert [mock_modbus_unit.holding[a] for a in range(147, 150)] == [0x0, 0xC000, 0x0]
 
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
-@pytest.mark.parametrize("weekday", range(1, 8))
+@pytest.mark.parametrize("weekday", list(Weekday))
 @pytest.mark.asyncio
 async def test_isystem_set_day_writes_requested_three_register_block(
     mock_modbus_unit, schedule, base, weekday
@@ -172,9 +177,9 @@ async def test_isystem_set_day_writes_requested_three_register_block(
     mock_modbus_unit.holding.update({231: 0x2000, 232: 0x2023, 233: 0x2038})
     boiler = isystem_gtw26(mock_modbus_unit)
 
-    await boiler.schedule.async_set_day(schedule, weekday, [(time(8, 0), time(9, 0))])
+    await boiler.schedule.async_set_day(schedule, weekday, [ComfortPeriod(time(8, 0), time(9, 0))])
 
-    start = base + 3 * (weekday - 1)
+    start = base + 3 * int(weekday)
     assert [mock_modbus_unit.holding[address] for address in range(start, start + 3)] == [
         0x0000,
         0xC000,
@@ -190,7 +195,9 @@ async def test_isystem_set_day_writes_requested_three_register_block(
 @pytest.mark.asyncio
 async def test_isystem_schedules_set_day_facade_writes(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
-    await boiler.schedule.async_set_day("circuit_b_p4", 1, [(time(8, 0), time(9, 0))])
+    await boiler.schedule.async_set_day(
+        "circuit_b_p4", Weekday.MONDAY, [ComfortPeriod(time(8, 0), time(9, 0))]
+    )
     assert [mock_modbus_unit.holding[a] for a in range(147, 150)] == [0x0, 0xC000, 0x0]
 
 
@@ -198,7 +205,7 @@ async def test_isystem_schedules_set_day_facade_writes(mock_modbus_unit):
 async def test_isystem_schedules_set_day_rejects_unknown_schedule(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
     with pytest.raises(ValueError, match="unknown schedule"):
-        await boiler.schedule.async_set_day("nope", 1, [])
+        await boiler.schedule.async_set_day("nope", Weekday.MONDAY, [])
 
 
 @pytest.mark.asyncio
@@ -207,7 +214,7 @@ async def test_isystem_schedules_read_paths_reject_unknown_schedule(mock_modbus_
     with pytest.raises(ValueError, match="unknown schedule"):
         boiler.schedule.get_week("nope")
     with pytest.raises(ValueError, match="unknown schedule"):
-        boiler.schedule.get_day("nope", 1)
+        boiler.schedule.get_day("nope", Weekday.MONDAY)
     with pytest.raises(ValueError, match="unknown schedule"):
         await boiler.schedule.async_update("nope")
 
@@ -215,8 +222,8 @@ async def test_isystem_schedules_read_paths_reject_unknown_schedule(mock_modbus_
 @pytest.mark.asyncio
 async def test_isystem_set_day_rejects_bad_weekday(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
-    with pytest.raises(ValueError, match="weekday"):
-        await boiler.schedule.async_set_day("circuit_b_p4", 0, [])
+    with pytest.raises(ValueError, match="Weekday"):
+        await boiler.schedule.async_set_day("circuit_b_p4", 7, [])
 
 
 def test_schedule_day_encode_rejects_reversed_period():

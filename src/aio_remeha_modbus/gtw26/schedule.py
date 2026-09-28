@@ -1,6 +1,9 @@
 """GTW26 weekly comfort schedules."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import time
+from itertools import starmap
 from typing import Any, ClassVar, Self, override
 
 from modbus_connection import ModbusUnit
@@ -11,14 +14,25 @@ from aio_remeha_modbus.gtw26.const import (
     DAYS,
     SCHEDULE_BASES,
     WEEKDAY_FIELDS,
+    Weekday,
 )
 from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.helpers.gtw26 import (
     DaySchedule,
-    WeekSchedule,
     decode_day,
     encode_day,
 )
+
+
+@dataclass(frozen=True)
+class ComfortPeriod:
+    """One comfort period on a single day.
+
+    `end` may be `time(0, 0)`, meaning midnight at the end of the day (24:00).
+    """
+
+    start: time
+    end: time
 
 
 class ScheduleDayField(RegisterField[DaySchedule]):
@@ -62,16 +76,18 @@ class WeekProgram(Gtw26Component):
     sunday = schedule_day(6 * DAY_STRIDE, writable=True)
 
     @property
-    def week(self) -> WeekSchedule:
-        """Comfort periods keyed by weekday, from Monday through Sunday."""
+    def week(self) -> dict[Weekday, list[ComfortPeriod]]:
+        """Comfort periods keyed by `Weekday`, from Monday through Sunday."""
         days = tuple(getattr(self, field) for field in WEEKDAY_FIELDS)
-        return {day + 1: periods or [] for day, periods in enumerate(days)}
+        return {
+            Weekday(day): list(starmap(ComfortPeriod, periods or []))
+            for day, periods in enumerate(days)
+        }
 
-    async def async_set_day(self, weekday: int, periods: DaySchedule) -> None:
+    async def async_set_day(self, weekday: Weekday, periods: list[ComfortPeriod]) -> None:
         """Write one weekday of the comfort program."""
-        if not 1 <= weekday <= DAYS:
-            raise ValueError(f"weekday must be 1 to {DAYS}, got {weekday}")
-        await self.write(WEEKDAY_FIELDS[weekday - 1], periods)
+        day = Weekday(weekday)
+        await self.write(WEEKDAY_FIELDS[day], [(period.start, period.end) for period in periods])
         if self._on_day_written is not None:
             self._on_day_written(self)
 
@@ -101,14 +117,16 @@ class ScheduleFacade:
         """Poll one named weekly program."""
         await self._require_schedule(name).async_update()
 
-    def get_day(self, schedule: str, weekday: int) -> DaySchedule:
+    def get_day(self, schedule: str, weekday: Weekday) -> list[ComfortPeriod]:
         """Return one weekday from a named schedule."""
-        return self._require_schedule(schedule).week[weekday]
+        return self._require_schedule(schedule).week[Weekday(weekday)]
 
-    def get_week(self, schedule: str) -> WeekSchedule:
+    def get_week(self, schedule: str) -> dict[Weekday, list[ComfortPeriod]]:
         """Return all weekdays from a named schedule."""
         return self._require_schedule(schedule).week
 
-    async def async_set_day(self, schedule: str, weekday: int, periods: DaySchedule) -> None:
+    async def async_set_day(
+        self, schedule: str, weekday: Weekday, periods: list[ComfortPeriod]
+    ) -> None:
         """Write one weekday of a named schedule."""
         await self._require_schedule(schedule).async_set_day(weekday, periods)
