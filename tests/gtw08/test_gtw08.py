@@ -5,6 +5,7 @@ from datetime import time
 
 import pytest
 from dateutil import tz
+from modbus_connection import GatewayPathUnavailableError, ServerDeviceBusyError
 from modbus_connection.exceptions import IllegalFunctionError
 from modbus_connection.mock import MockModbusUnit
 
@@ -28,17 +29,19 @@ from aio_remeha_modbus.gtw08.const import (
     Weekday,
 )
 from aio_remeha_modbus.gtw08.errors import RemehaModbusError
+from aio_remeha_modbus.gtw08.gtw08 import DetectionFailureReason
 from aio_remeha_modbus.gtw08.main_control_monitoring import ApplianceErrorPriority, MonitoringStatus
 from aio_remeha_modbus.gtw08.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,
 )
+from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoardType
 from aio_remeha_modbus.helpers.fields import decode_bytes
 
 
 @pytest.mark.asyncio
-async def test_read_single_variable(gtw_08):
+async def test_read_single_variable(gtw_08: GTW08):
     """Test that the API can be created and a single register be read."""
 
     assert len(gtw_08.discovery_table.device_boards) == 2
@@ -60,7 +63,7 @@ async def test_read_device_instance(gtw_08: GTW08):
 
 
 @pytest.mark.asyncio
-async def test_read_zone(gtw_08):
+async def test_read_zone(gtw_08: GTW08):
     """Read a single zone."""
 
     zone: ClimateZone | None = gtw_08.zones[0]
@@ -93,7 +96,7 @@ async def test_read_zone(gtw_08):
 
 
 @pytest.mark.asyncio
-async def test_read_zone_update(gtw_08):
+async def test_read_zone_update(gtw_08: GTW08):
     """Read a zone update from the modbus device."""
 
     # Read a single zone
@@ -116,7 +119,7 @@ async def test_read_zone_update(gtw_08):
 
 
 @pytest.mark.asyncio
-async def test_health_check(mock_modbus_unit):
+async def test_health_check(mock_modbus_unit: MockModbusUnit):
     """Test a health check can be run without raising an exception."""
 
     await GTW08.async_health_check(mock_modbus_unit)
@@ -352,3 +355,72 @@ async def test_read_registers_invalid_format(gtw_08: GTW08):
 
     with pytest.raises(struct.error):
         await gtw_08.async_read_registers(address=130, count=1, struct_format=">HH")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["system_discovery_table_ok.json"], indirect=True)
+async def test_detection_successful(remeha_modbus_unit):
+    """Test that a successful detection returns the correct main board."""
+
+    detection = await GTW08.async_detect(remeha_modbus_unit)
+    assert detection.success is True
+    assert detection.failure_reason is None
+
+    device = detection.main_board
+    assert device is not None
+    assert device.is_mainboard()
+
+    board_category = device.board_category
+    assert board_category is not None
+    assert board_category.type is DeviceBoardType.EHC
+    assert board_category.generation == 10
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["system_discovery_table_ok.json"], indirect=True)
+async def test_detection_raises_on_transient(remeha_modbus_unit: MockModbusUnit):
+    """Test that a detection attempts on a transient modbus error."""
+
+    # Set up the failure mode
+    remeha_modbus_unit.fail_read(130, ServerDeviceBusyError())
+
+    with pytest.raises(ServerDeviceBusyError):
+        await GTW08.async_detect(remeha_modbus_unit)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["system_discovery_table_ok.json"], indirect=True)
+async def test_detection_failure_not_a_gtw08(remeha_modbus_unit: MockModbusUnit):
+    """Test that a detection attempts on a transient modbus error."""
+
+    # Set up the failure mode. A modbus that is not a GTW-08 might
+    # not serve the requested address.
+    remeha_modbus_unit.fail_read(130, GatewayPathUnavailableError())
+
+    detection = await GTW08.async_detect(remeha_modbus_unit)
+    assert detection.success is False
+    assert detection.failure_reason is DetectionFailureReason.NOT_A_GTW08
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "remeha_modbus_unit", ["system_discovery_table_no_main_board.json"], indirect=True
+)
+async def test_detection_no_main_board(remeha_modbus_unit):
+    """Test that detection fails with the correct reason if the system discovvery table contains no main board."""
+
+    detection = await GTW08.async_detect(remeha_modbus_unit)
+    assert detection.success is False
+    assert detection.failure_reason is DetectionFailureReason.NO_MAINBOARD
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "remeha_modbus_unit", ["system_discovery_table_no_gateway.json"], indirect=True
+)
+async def test_detection_no_gateway(remeha_modbus_unit):
+    """Test that detection fails with the correct reason if the system discovvery table contains no gateway."""
+
+    detection = await GTW08.async_detect(remeha_modbus_unit)
+    assert detection.success is False
+    assert detection.failure_reason is DetectionFailureReason.NO_GATEWAY

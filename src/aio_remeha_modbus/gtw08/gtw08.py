@@ -2,10 +2,19 @@
 
 import logging
 import struct
+from dataclasses import dataclass
 from datetime import tzinfo
+from enum import Enum
 from typing import Any
 
-from modbus_connection import ModbusExceptionError, ModbusUnit
+from modbus_connection import (
+    GatewayPathUnavailableError,
+    IllegalDataAddressError,
+    IllegalDataValueError,
+    ModbusError,
+    ModbusExceptionError,
+    ModbusUnit,
+)
 from modbus_connection.model import ComponentGroup, Device, ManualComponent, UpdateReport
 
 from aio_remeha_modbus.gtw08.appliance import (
@@ -15,7 +24,11 @@ from aio_remeha_modbus.gtw08.climate_zone import ClimateZone, ClimateZoneFunctio
 from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, REMEHA_ZONE_RESERVED_REGISTERS
 from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitoring
-from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
+from aio_remeha_modbus.gtw08.system_discovery_table import (
+    DeviceBoard,
+    DeviceBoardType,
+    SystemDiscoveryTable,
+)
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 
 # Attribute names of syb-systems each update method reads.
@@ -83,6 +96,76 @@ class GTW08(Device):
             await mc.async_update()
         except ModbusExceptionError as e:
             raise RemehaModbusError("health_check_failed") from e
+
+    @staticmethod
+    async def async_detect(unit: ModbusUnit) -> GTW08Detection:
+        """Detect the type of main board.
+
+        Args:
+            unit (ModbusUnit): The modbus unit to connect to the device.
+
+        Returns:
+            `GTW08Detection` The discovery result.
+
+        Raises:
+            `ModbusError` if a transient or unknown modbus error is raised during discovery.
+
+        """
+
+        system_discovery_table = SystemDiscoveryTable(unit)
+        try:
+            await system_discovery_table.async_update()
+            main_boards = [
+                board for board in system_discovery_table.device_boards if board.is_mainboard()
+            ]
+            gtw08_board = next(
+                iter(
+                    [
+                        board
+                        for board in system_discovery_table.device_boards
+                        if board.board_category
+                        and board.board_category.type is DeviceBoardType.GATEWAY
+                        and board.board_category.generation == 0x08
+                    ]
+                ),
+                None,
+            )
+            if not main_boards:
+                return GTW08Detection(
+                    main_board=None,
+                    success=False,
+                    failure_reason=DetectionFailureReason.NO_MAINBOARD,
+                )
+
+            if not gtw08_board:
+                return GTW08Detection(
+                    main_board=None,
+                    success=False,
+                    failure_reason=DetectionFailureReason.NO_GATEWAY,
+                )
+
+            return GTW08Detection(main_board=main_boards[0], success=True, failure_reason=None)
+        except (IllegalDataAddressError, IllegalDataValueError, GatewayPathUnavailableError) as e:
+            _LOGGER.debug(
+                "GTW-08 detection failed; assuming no GTW-08 present on the other end.",
+                exc_info=e,
+                stack_info=True,
+            )
+            return GTW08Detection(
+                main_board=None, success=False, failure_reason=DetectionFailureReason.NOT_A_GTW08
+            )
+        except ModbusExceptionError as e:
+            _LOGGER.warning(
+                "GTW-08 detection failed, possibly temporarily.", exc_info=e, stack_info=True
+            )
+            raise
+        except ModbusError as e:
+            _LOGGER.warning(
+                "GTW-08 detection failed because of an unknown modbus error.",
+                exc_info=e,
+                stack_info=True,
+            )
+            raise
 
     async def _async_setup(self):
         await self.discovery_table.async_update()
@@ -166,3 +249,30 @@ class GTW08(Device):
 
         report = await self.async_poll(SETTINGS)
         return await self.async_poll(READINGS, report)
+
+
+class DetectionFailureReason(Enum):
+    """Describe the reason for device discovery failure."""
+
+    NO_MAINBOARD = 0
+    """The available device boards were successfully retrieved, but none of them is a main board."""
+
+    NO_GATEWAY = 1
+    """The available device boards were successfully retrieved, but none of them is a gateway."""
+
+    NOT_A_GTW08 = 2
+    """A modbus connection could be made but the device doesn't seem to be a GTW-08."""
+
+
+@dataclass(frozen=True)
+class GTW08Detection:
+    """Describe a GTW08 detection attempt."""
+
+    main_board: DeviceBoard | None
+    """The discovered main board. Always has a value if `success is True`."""
+
+    success: bool
+    """Whether a GTW-08 was successfully discovered."""
+
+    failure_reason: DetectionFailureReason | None
+    """The reason the discovery failed. Always has a value if `success is False`."""
