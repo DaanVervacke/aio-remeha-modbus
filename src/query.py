@@ -26,7 +26,6 @@ from aio_remeha_modbus.gtw26 import (
     Gtw26ProbeError,
     RegisterLayout,
     ScheduleFacade,
-    async_detect,
 )
 from aio_remeha_modbus.gtw26.const import MESSAGE_SPACING
 from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
@@ -224,7 +223,7 @@ async def _run_gtw26(args: argparse.Namespace, unit: CountingUnit) -> int:
     """Detect a GTW26 gateway, poll it and print the requested sections."""
     unit.set_message_spacing(MESSAGE_SPACING)
     try:
-        detection = await async_detect(unit)
+        detection = await GTW26.async_detect(unit)
     except Gtw26ProbeError as err:
         print("Could not detect a GTW26 controller.")  # noqa: T201
         _print_probe_evidence(err.detection)

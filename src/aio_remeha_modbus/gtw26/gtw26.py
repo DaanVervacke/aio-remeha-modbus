@@ -52,6 +52,7 @@ from aio_remeha_modbus.gtw26.hot_water import HotWater, ISystemHotWater
 from aio_remeha_modbus.gtw26.schedule import ScheduleFacade
 from aio_remeha_modbus.gtw26.sensors import ISystemSensors, Sensors
 from aio_remeha_modbus.gtw26.system_discovery_table import (
+    Gtw26Detection,
     Identity,
     ISystemIdentity,
     async_detect,
@@ -131,6 +132,23 @@ class GTW26(Device):
         self._write_lock = asyncio.Lock()
         self._setup_complete = False
         self._setup_lock = asyncio.Lock()
+
+    @staticmethod
+    async def async_detect(unit: ModbusUnit) -> Gtw26Detection:
+        """Detect the GTW26 controller and its register layout.
+
+        Args:
+            unit (ModbusUnit): The modbus unit to connect to the device.
+
+        Returns:
+            `Gtw26Detection`: The detection result. Its `device` field holds a
+            configured `GTW26` facade when a known register layout answered.
+
+        Raises:
+            `Gtw26ProbeError` if no known register layout answered.
+
+        """
+        return await async_detect(unit)
 
     @property
     def name(self) -> str:

@@ -6,7 +6,6 @@ from aio_remeha_modbus.gtw26 import (
     GTW26,
     ControllerGeneration,
     Gtw26ProbeError,
-    async_detect,
     async_probe,
 )
 
@@ -46,7 +45,7 @@ def _seed_isystem(unit) -> None:
 async def test_probe_base_layout(mock_modbus_unit, type_code, variant):
     _seed_base(mock_modbus_unit, type_code)
 
-    detection = await async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
     assert detection.raw_type_code == type_code
@@ -61,7 +60,7 @@ async def test_probe_isystem_layout(mock_modbus_unit, type_code):
     _seed_base(mock_modbus_unit, type_code)
     _seed_isystem(mock_modbus_unit)
 
-    detection = await async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
     assert detection.raw_type_code == type_code
@@ -78,7 +77,7 @@ async def test_probe_accepts_isystem_without_base_identity(mock_modbus_unit):
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
     mock_modbus_unit.fail_read(457, IllegalDataAddressError())
 
-    detection = await async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
     assert detection.raw_type_code is None
@@ -91,7 +90,7 @@ async def test_probe_rejects_unknown_type(mock_modbus_unit):
     _seed_isystem(mock_modbus_unit)
 
     with pytest.raises(Gtw26ProbeError) as caught:
-        await async_detect(mock_modbus_unit)
+        await GTW26.async_detect(mock_modbus_unit)
 
     assert caught.value.detection.raw_type_code == 21
     assert caught.value.detection.isystem_detected is True
@@ -106,7 +105,7 @@ async def test_probe_rejects_when_both_layouts_fail(mock_modbus_unit):
     mock_modbus_unit.fail_read(679, IllegalDataAddressError())
 
     with pytest.raises(Gtw26ProbeError) as caught:
-        await async_detect(mock_modbus_unit)
+        await GTW26.async_detect(mock_modbus_unit)
 
     assert all(block.outcome == "unsupported" for block in caught.value.detection.base_probe)
     assert all(block.outcome == "unsupported" for block in caught.value.detection.isystem_probe)
@@ -125,7 +124,7 @@ async def test_probe_reports_transport_errors(mock_modbus_unit, error):
     mock_modbus_unit.fail_read(3, error)
     mock_modbus_unit.fail_read(457, error)
 
-    detection = await async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
     block = detection.base_probe[0]
@@ -142,7 +141,7 @@ async def test_probe_failure_retains_known_variant(mock_modbus_unit):
     error = ModbusTimeoutError("timeout")
     mock_modbus_unit.fail_read(3, error)
 
-    detection = await async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
     assert detection.raw_type_code == 24
