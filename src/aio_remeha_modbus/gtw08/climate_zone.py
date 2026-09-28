@@ -760,7 +760,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     def __eq__(self, other) -> bool:
         """Compare this `ClimateZone` with another for equality.
 
-        For equality, only the properties `id`, `type` and `function` are considered.
+        For equality, only the properties ``id``, ``type`` and ``function`` are considered.
 
         Returns:
             `bool`: `True` if the objects are considered equal, `False` otherwise.

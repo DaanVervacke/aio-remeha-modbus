@@ -81,7 +81,25 @@ class GTW26(Device):
         message_spacing_seconds: float = MESSAGE_SPACING,
         request_timeout: float | None = None,
     ) -> None:
-        """Create a GTW26 facade over ``unit``."""
+        """Create a GTW26 facade over ``unit``.
+
+        Args:
+            name: A label for this facade, exposed through ``name``.
+            unit: The Modbus unit to poll registers from.
+            layout: Force a register layout instead of auto-detecting one on the
+                first update. When omitted, detection picks `RegisterLayout.ISYSTEM`
+                when the iSystem identity answers, `RegisterLayout.BASE` otherwise.
+            generation: The controller generation to use, as reported by
+                `async_detect`. Detected automatically when omitted.
+            force_zone_a: Report zone A as present even without a reported sensor.
+            force_zone_b: Report zone B as present even without a reported sensor.
+            force_zone_c: Report zone C as present even without a reported sensor.
+            message_spacing_seconds: The pause between Modbus messages that the
+                controller requires. Defaults to `MESSAGE_SPACING`.
+            request_timeout: Require a request timeout on ``unit`` instead of
+                leaving its configured value unchanged.
+
+        """
         super().__init__(unit)
         unit.set_message_spacing(message_spacing_seconds)
         if request_timeout is not None:

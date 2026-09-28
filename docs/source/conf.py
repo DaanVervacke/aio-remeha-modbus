@@ -22,12 +22,15 @@ release = "4.0.0"
 
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon"]
 
-templates_path = ["_templates"]
 exclude_patterns = []
+
+# Sphinx cross-references bare `type[...]` builtin-generic annotations, which collide with
+# the documented `ClimateZone.type` and `DeviceBoardCategory.type` attributes and resolve
+# ambiguously. The annotations are valid Python, so suppress only that resolution warning.
+suppress_warnings = ["ref.python"]
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "alabaster"
-html_static_path = ["_static"]

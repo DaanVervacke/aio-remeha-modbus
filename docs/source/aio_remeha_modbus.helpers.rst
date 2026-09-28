@@ -4,10 +4,26 @@ aio\_remeha\_modbus.helpers package
 Submodules
 ----------
 
+aio\_remeha\_modbus.helpers.fields module
+-----------------------------------------
+
+.. automodule:: aio_remeha_modbus.helpers.fields
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 aio\_remeha\_modbus.helpers.gtw08 module
 ----------------------------------------
 
 .. automodule:: aio_remeha_modbus.helpers.gtw08
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+aio\_remeha\_modbus.helpers.gtw26 module
+----------------------------------------
+
+.. automodule:: aio_remeha_modbus.helpers.gtw26
    :members:
    :show-inheritance:
    :undoc-members:

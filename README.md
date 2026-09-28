@@ -42,6 +42,16 @@ Query all components
 $ remeha-query --transport serial socket://192.168.1.2:8899 --all
 ```
 
+Query all components of a GTW-26 appliance. The register layout (`base` or `isystem`) is detected automatically:
+```bash
+$ remeha-query --gateway gtw26 --transport serial socket://192.168.1.2:8899 --all
+```
+
+Query the sensors and climate zone A of a GTW-26 appliance:
+```bash
+$ remeha-query --gateway gtw26 --transport serial socket://192.168.1.2:8899 --sensors --zone A
+```
+
 ### GTW-08 detection
 To detect if a GTW-08 is behind a `ModbusUnit`, call `await GTW08.async_detect()`.
 
@@ -76,3 +86,25 @@ and can be retrieved using `GTW08.zones`.
 When a `ClimateZone` is read from the appliance and its `mode` is `ClimateZoneMode.SCHEDULING`,
 the schedules for each `Weekday` are available through `ClimateZone.current_schedule` as
 instances of `gtw08.time_program.TimeProgram`.
+
+### GTW-26 detection
+To detect a GTW-26 controller behind a `ModbusUnit`, call `await async_detect()`. The register
+layout (`base` or `isystem`) and the controller generation are detected automatically; pass a
+`RegisterLayout` to the `GTW26` constructor to override the detected layout.
+
+GTW-26 controllers require a small pause between Modbus messages. Set the message spacing
+advertised in `gtw26.const.MESSAGE_SPACING` on your `ModbusUnit` before use.
+
+### GTW-26 device
+To create a new API instance, provide the `ModbusUnit` instance to the `GTW26` constructor.
+Components like `GTW26.sensors`, `GTW26.hot_water` and `GTW26.climate_zones` are available after
+`await GTW26.async_update()`.
+
+### GTW-26 climate zones
+Zones are exposed as `ClimateZone` instances keyed `A`, `B` and `C` through `GTW26.climate_zones`.
+The `zone_a_present`, `zone_b_present`, `zone_c_present` and `hot_water_present` properties report
+which optional components answered on the controller.
+
+### GTW-26 schedules
+Weekly comfort schedules are available through `GTW26.schedule` as a `ScheduleFacade`.
+`GTW26.schedule.get_week("hot_water")` returns the comfort periods for each weekday.

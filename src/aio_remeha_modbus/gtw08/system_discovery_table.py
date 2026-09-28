@@ -79,7 +79,7 @@ class DeviceBoardCategory:
     def __eq__(self, other: object) -> bool:
         """Compare this `DeviceBoardCategory` to another for equality.
 
-        Only `type` is used to determine equality, since the generation might change.
+        Only ``type`` is used to determine equality, since the generation might change.
 
         Returns:
             `bool`: `True` if the objects are considered equal, `False` otherwise.
