@@ -31,7 +31,7 @@ class _RetryStatistics:
 
     @property
     def retries(self) -> tuple[TypeForm[TransientModbusError], ...]:
-        """Return a read-only view of the exceptions causing the retries."""
+        """A read-only view of the exceptions causing the retries."""
 
         return tuple(self._retries)
 
@@ -77,7 +77,7 @@ def retry_on_transient(
     return decorator
 
 
-class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
+class RetryingModbusUnit(ModbusUnit, _RetryStatistics):  # ruff: ignore[too-many-public-methods]
     """A `ModbusUnit` that retries requests on failure.
 
     Only methods decorated with `@retry_on_transient()` are retried on failure.

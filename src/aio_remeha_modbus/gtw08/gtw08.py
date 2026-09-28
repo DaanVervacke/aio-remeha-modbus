@@ -119,15 +119,13 @@ class GTW08(Device):
                 board for board in system_discovery_table.device_boards if board.is_mainboard()
             ]
             gtw08_board = next(
-                iter(
-                    [
-                        board
-                        for board in system_discovery_table.device_boards
-                        if board.board_category
-                        and board.board_category.type is DeviceBoardType.GATEWAY
-                        and board.board_category.generation == 0x08
-                    ]
-                ),
+                iter([
+                    board
+                    for board in system_discovery_table.device_boards
+                    if board.board_category
+                    and board.board_category.type is DeviceBoardType.GATEWAY
+                    and board.board_category.generation == 0x08
+                ]),
                 None,
             )
             if not main_boards:
@@ -215,7 +213,7 @@ class GTW08(Device):
 
     @property
     def name(self) -> str:
-        """Return the modbus hub name."""
+        """The modbus hub name."""
         return self._name
 
     async def async_read_registers(
