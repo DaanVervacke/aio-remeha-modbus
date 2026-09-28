@@ -20,6 +20,7 @@ from modbus_connection.model import ComponentGroup, Device, ManualComponent, Upd
 from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
 )
+from aio_remeha_modbus.gtw08.buffer_tank import BufferTank
 from aio_remeha_modbus.gtw08.climate_zone import ClimateZone, ClimateZoneFunction
 from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, REMEHA_ZONE_RESERVED_REGISTERS
 from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
@@ -32,7 +33,7 @@ from aio_remeha_modbus.gtw08.system_discovery_table import (
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 
 # Attribute names of syb-systems each update method reads.
-READINGS = ("main_control_monitoring", "appliance", "_zones")
+READINGS = ("main_control_monitoring", "appliance", "buffer_tank", "_zones")
 SETTINGS = ("discovery_table",)
 ALL = (*READINGS, *SETTINGS)
 
@@ -76,6 +77,7 @@ class GTW08(Device):
         self.discovery_table = SystemDiscoveryTable(unit)
         self.main_control_monitoring = MainControlMonitoring(unit)
         self.appliance = Appliance(unit)
+        self.buffer_tank = BufferTank(unit)
 
         self.zones: list[ClimateZone] = []
         self._zones: ComponentGroup | None = None
@@ -169,6 +171,7 @@ class GTW08(Device):
         await self.discovery_table.async_update()
         await self.main_control_monitoring.async_update()
         await self.appliance.async_update()
+        await self.buffer_tank.async_update()
 
         if self.discovery_table.number_of_zones is None:
             raise RemehaApiError(translation_key="api_setup_number_of_zones")
