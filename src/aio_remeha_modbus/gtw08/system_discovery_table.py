@@ -76,7 +76,7 @@ class DeviceBoardCategory:
 
         return f"{name}-{self.generation}"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Compare this `DeviceBoardCategory` to another for equality.
 
         Only `type` is used to determine equality, since the generation might change.
@@ -167,7 +167,7 @@ class DeviceBoard(RemehaComponent):
 
         return False if self.board_category is None else self.board_category.type.is_mainboard()
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Compare this `DeviceInstance` with another for equality.
 
         Only `board_category` is considered, to allow HA to update
