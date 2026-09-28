@@ -45,12 +45,12 @@ $ remeha-query --transport serial socket://192.168.1.2:8899 --all
 ### GTW-08 detection
 To detect if a GTW-08 is behind a `ModbusUnit`, call `await GTW08.async_detect()`.
 
-#### Caching
+### Caching
 To retrieve fetch data from modbus, call `await GTW08.async_update()` explicitly. After that, the values are retained until the next update call.
 
 The discovery table in `GTW08.discovery_table` is only read at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
 
-#### Error handling
+### Error handling
 All errors raised by this library are intended to be translated.
 To facilitate that, the base error class contains a `translation_key` field to look up the translation
 and a `translation_placeholders` field. This is a `dict` to be used when extrapolating the error message.
