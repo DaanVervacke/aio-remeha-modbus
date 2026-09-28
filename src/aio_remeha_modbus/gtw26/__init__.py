@@ -15,9 +15,10 @@ __all__ = [
     "ClimateZoneB",
     "Config",
     "ControllerGeneration",
+    "DetectionFailureReason",
     "Diagnostics",
-    "Gtw26Detection",
-    "Gtw26ProbeError",
+    "GTW26Detection",
+    "GTW26ProbeError",
     "HeatingMode",
     "HotWater",
     "HotWaterMode",
@@ -43,13 +44,10 @@ __all__ = [
     "Service",
     "Settings",
     "SystemDiscoveryTable",
-    "UpdateReport",
     "WeekProgram",
     "async_detect",
     "async_probe",
 ]
-
-from modbus_connection.model import UpdateReport
 
 from .climate_zone import (
     ClimateZone,
@@ -87,13 +85,14 @@ from .const import (
     NightMode,
     RegisterLayout,
 )
-from .errors import Gtw26ProbeError
+from .errors import GTW26ProbeError
 from .gtw26 import GTW26, async_detect, async_probe
 from .hot_water import HotWater, ISystemHotWater
 from .schedule import ScheduleFacade, WeekProgram
 from .sensors import ISystemSensors, Sensors
 from .system_discovery_table import (
-    Gtw26Detection,
+    DetectionFailureReason,
+    GTW26Detection,
     Identity,
     ISystemIdentity,
     ProbeBlock,

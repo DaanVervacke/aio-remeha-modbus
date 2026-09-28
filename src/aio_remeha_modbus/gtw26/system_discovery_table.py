@@ -1,12 +1,15 @@
 """GTW26 register-layout discovery and identity components."""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from modbus_connection import (
     IllegalDataAddressError,
     IllegalFunctionError,
+    ModbusConnectionError,
     ModbusError,
+    ModbusTimeoutError,
     ModbusUnit,
 )
 from modbus_connection.model import integer
@@ -21,7 +24,7 @@ from aio_remeha_modbus.gtw26.const import (
     ControllerGeneration,
     RegisterLayout,
 )
-from aio_remeha_modbus.gtw26.errors import Gtw26ProbeError
+from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
 from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.helpers.fields import controller_type_field
 
@@ -88,11 +91,29 @@ class ProbeBlock:
         return str(self.error) if self.error is not None else None
 
 
+class DetectionFailureReason(Enum):
+    """Describe the reason for a GTW26 detection failure."""
+
+    NOT_A_GTW26 = 0
+    """No identity register layout answered, so the device is not a GTW26."""
+
+    UNKNOWN_MODEL = 1
+    """A device answered but its type code does not name a known generation."""
+
+
 @dataclass(frozen=True)
-class Gtw26Detection:
+class GTW26Detection:
     """Describe a GTW26 detection attempt and its probe evidence."""
 
     device: GTW26 | None
+    """The discovered device facade. Always has a value if `success is True`."""
+
+    success: bool
+    """Whether a GTW26 controller with a known register layout was discovered."""
+
+    failure_reason: DetectionFailureReason | None
+    """The reason the detection failed. Always has a value if `success is False`."""
+
     raw_type_code: int | None
     generation: ControllerGeneration | None
     isystem_detected: bool
@@ -107,11 +128,16 @@ class SystemDiscoveryTable(Gtw26Component):
 async def _async_read_blocks(
     unit: ModbusUnit, blocks: tuple[tuple[int, int], ...]
 ) -> tuple[ProbeBlock, ...]:
-    """Read identity blocks and retain successful values or raised errors."""
+    """Read identity blocks, retaining register answers and wrong-device rejections.
+
+    Connection-level errors propagate so a dead link fails detection outright.
+    """
     results: list[ProbeBlock] = []
     for address, count in blocks:
         try:
             values = tuple(await unit.read_holding_registers(address, count))
+        except ModbusConnectionError, ModbusTimeoutError:
+            raise
         except ModbusError as err:
             results.append(ProbeBlock(address, count, None, err))
         else:
@@ -127,8 +153,12 @@ def _block_values(blocks: tuple[ProbeBlock, ...], address: int) -> tuple[int, ..
     return None
 
 
-async def async_detect(unit: ModbusUnit) -> Gtw26Detection:
-    """Detect the GTW26 layout and retain all identity probe evidence."""
+async def async_detect(unit: ModbusUnit) -> GTW26Detection:
+    """Detect the GTW26 layout and retain all identity probe evidence.
+
+    A wrong-device answer is reported through a failed detection result;
+    only transient or unknown `ModbusError` instances propagate.
+    """
     base_probe = await _async_read_blocks(unit, BASE_IDENTITY_BLOCKS)
     isystem_probe = await _async_read_blocks(unit, ISYSTEM_IDENTITY_BLOCKS)
     type_values = _block_values(base_probe, 457)
@@ -139,43 +169,44 @@ async def async_detect(unit: ModbusUnit) -> Gtw26Detection:
         block.outcome == "success" for block in base_probe
     )
 
-    detection = Gtw26Detection(
-        None,
-        type_code,
-        generation,
-        isystem_detected,
-        base_probe,
-        isystem_probe,
-    )
-    if type_code is not None and type_code in MODEL_CODES and generation is None:
-        raise Gtw26ProbeError(detection)
-
     from aio_remeha_modbus.gtw26.gtw26 import GTW26  # noqa: PLC0415
 
-    if isystem_detected:
-        return Gtw26Detection(
-            GTW26("GTW26", unit, layout=RegisterLayout.ISYSTEM, generation=generation),
-            type_code,
-            generation,
-            True,
-            base_probe,
-            isystem_probe,
+    def result(
+        device: GTW26 | None, failure_reason: DetectionFailureReason | None
+    ) -> GTW26Detection:
+        """Freeze the probe evidence into one detection result."""
+        return GTW26Detection(
+            device=device,
+            success=failure_reason is None,
+            failure_reason=failure_reason,
+            raw_type_code=type_code,
+            generation=generation,
+            isystem_detected=isystem_detected,
+            base_probe=base_probe,
+            isystem_probe=isystem_probe,
         )
+
+    if type_code is not None and type_code in MODEL_CODES and generation is None:
+        return result(None, DetectionFailureReason.UNKNOWN_MODEL)
+    if isystem_detected:
+        device = GTW26("GTW26", unit, layout=RegisterLayout.ISYSTEM, generation=generation)
+        return result(device, None)
     if base_detected:
         assert generation is not None
-        return Gtw26Detection(
-            GTW26("GTW26", unit, layout=RegisterLayout.BASE, generation=generation),
-            type_code,
-            generation,
-            False,
-            base_probe,
-            isystem_probe,
-        )
-    raise Gtw26ProbeError(detection)
+        device = GTW26("GTW26", unit, layout=RegisterLayout.BASE, generation=generation)
+        return result(device, None)
+    return result(None, DetectionFailureReason.NOT_A_GTW26)
 
 
 async def async_probe(unit: ModbusUnit) -> GTW26:
-    """Detect the GTW26 layout and return its configured device facade."""
+    """Detect the GTW26 layout and return its configured device facade.
+
+    Raises:
+        GTW26ProbeError: if detection returned a failed result.
+
+    """
     detection = await async_detect(unit)
+    if not detection.success:
+        raise GTW26ProbeError(detection)
     assert detection.device is not None
     return detection.device

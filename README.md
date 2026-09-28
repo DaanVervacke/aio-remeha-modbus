@@ -88,9 +88,11 @@ the schedules for each `Weekday` are available through `ClimateZone.current_sche
 instances of `gtw08.time_program.TimeProgram`.
 
 ### GTW-26 detection
-To detect a GTW-26 controller behind a `ModbusUnit`, call `await GTW26.async_detect()`. The register
-layout (`base` or `isystem`) and the controller generation are detected automatically; pass a
-`RegisterLayout` to the `GTW26` constructor to override the detected layout.
+To detect a GTW-26 controller behind a `ModbusUnit`, call `await GTW26.async_detect()`. Like its GTW-08
+counterpart, the returned `GTW26Detection` carries `success` and a `failure_reason` instead of raising for
+wrong-device answers; only transient `ModbusError`s propagate. The register layout (`base` or `isystem`)
+and the controller generation are detected automatically; pass a `RegisterLayout` to the `GTW26`
+constructor to override the detected layout.
 
 GTW-26 controllers require a small pause between Modbus messages. Set the message spacing
 advertised in `gtw26.const.MESSAGE_SPACING` on your `ModbusUnit` before use.

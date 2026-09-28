@@ -14,6 +14,7 @@ from modbus_connection import (
 )
 from modbus_connection.model import Component, ComponentGroup, Device, UpdateReport
 
+from aio_remeha_modbus.gtw08.errors import RemehaModbusError
 from aio_remeha_modbus.gtw26.climate_zone import (
     ClimateZone,
     ClimateZoneA,
@@ -47,12 +48,12 @@ from aio_remeha_modbus.gtw26.const import (
     HotWaterMode,
     RegisterLayout,
 )
-from aio_remeha_modbus.gtw26.errors import Gtw26ProbeError
+from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
 from aio_remeha_modbus.gtw26.hot_water import HotWater, ISystemHotWater
 from aio_remeha_modbus.gtw26.schedule import ScheduleFacade
 from aio_remeha_modbus.gtw26.sensors import ISystemSensors, Sensors
 from aio_remeha_modbus.gtw26.system_discovery_table import (
-    Gtw26Detection,
+    GTW26Detection,
     Identity,
     ISystemIdentity,
     async_detect,
@@ -116,7 +117,7 @@ class GTW26(Device):
 
         self.sensors: Sensors | ISystemSensors | None = None
         self.hot_water: HotWater | ISystemHotWater | None = None
-        self.climate_zones: dict[str, ClimateZone | ISystemClimateZone] | None = None
+        self.climate_zones: dict[str, ClimateZone | ISystemClimateZone] = {}
         self.settings: Settings | ISystemSettings | None = None
         self.config: Config | None = None
         self.diagnostics: Diagnostics | None = None
@@ -134,18 +135,17 @@ class GTW26(Device):
         self._setup_lock = asyncio.Lock()
 
     @staticmethod
-    async def async_detect(unit: ModbusUnit) -> Gtw26Detection:
-        """Detect the GTW26 controller and its register layout.
+    async def async_detect(unit: ModbusUnit) -> GTW26Detection:
+        """Detect the type of GTW26 controller.
 
         Args:
             unit (ModbusUnit): The modbus unit to connect to the device.
 
         Returns:
-            `Gtw26Detection`: The detection result. Its `device` field holds a
-            configured `GTW26` facade when a known register layout answered.
+            `GTW26Detection` The discovery result.
 
         Raises:
-            `Gtw26ProbeError` if no known register layout answered.
+            `ModbusError` if a transient or unknown modbus error is raised during discovery.
 
         """
         return await async_detect(unit)
@@ -171,6 +171,8 @@ class GTW26(Device):
         generation = self._generation
         if layout is None or generation is None:
             detection = await async_detect(self._unit)
+            if not detection.success:
+                raise GTW26ProbeError(detection)
             if layout is None:
                 layout = (
                     RegisterLayout.ISYSTEM if detection.isystem_detected else RegisterLayout.BASE
@@ -433,20 +435,24 @@ class GTW26(Device):
         return await group.async_read_raw(notify=False)
 
     @staticmethod
-    async def async_health_check(unit: ModbusUnit) -> bool:
-        """Return whether the unit can be identified as a GTW26 controller."""
+    async def async_health_check(unit: ModbusUnit) -> None:
+        """Verify if the system is reachable by reading a single register.
+
+        Raises:
+            RemehaModbusError: If the health check failed.
+
+        """
         try:
-            await async_detect(unit)
-        except Gtw26ProbeError:
-            return False
-        return True
+            await unit.read_holding_registers(457, 1)
+        except ModbusError as err:
+            raise RemehaModbusError("health_check_failed") from err
 
     @property
     def zone_a_present(self) -> bool:
         """Whether zone A has a reported sensor or is forced present."""
-        if self.climate_zones is None:
+        zone = self.climate_zones.get("A")
+        if zone is None:
             return self._force_zone_a
-        zone = self.climate_zones["A"]
         return bool(
             self._force_zone_a
             or zone.room_temperature is not None
@@ -460,9 +466,9 @@ class GTW26(Device):
     @property
     def zone_b_present(self) -> bool:
         """Whether zone B has a reported sensor or is forced present."""
-        if self.climate_zones is None:
+        zone = self.climate_zones.get("B")
+        if zone is None:
             return self._force_zone_b
-        zone = self.climate_zones["B"]
         return bool(
             self._force_zone_b
             or zone.room_temperature is not None
@@ -475,9 +481,11 @@ class GTW26(Device):
     @property
     def zone_c_present(self) -> bool:
         """Whether iSystem zone C has a reported sensor or is forced present."""
-        if self._layout is not RegisterLayout.ISYSTEM or self.climate_zones is None:
+        if self._layout is not RegisterLayout.ISYSTEM:
             return False
-        zone = self.climate_zones["C"]
+        zone = self.climate_zones.get("C")
+        if zone is None:
+            return False
         return bool(
             self._force_zone_c
             or zone.room_temperature is not None

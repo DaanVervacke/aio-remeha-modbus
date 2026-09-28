@@ -22,8 +22,7 @@ from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitorin
 from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.gtw26 import (
     GTW26,
-    Gtw26Detection,
-    Gtw26ProbeError,
+    GTW26Detection,
     RegisterLayout,
     ScheduleFacade,
 )
@@ -54,7 +53,7 @@ def _parse_zones(parser: argparse.ArgumentParser, args: argparse.Namespace) -> N
     args.zone = zones
 
 
-def _print_probe_evidence(detection: Gtw26Detection) -> None:
+def _print_probe_evidence(detection: GTW26Detection) -> None:
     """Print which identity blocks answered for each register layout."""
     for title, blocks in (
         ("base layout", detection.base_probe),
@@ -68,7 +67,7 @@ def _print_probe_evidence(detection: Gtw26Detection) -> None:
             print(line)  # noqa: T201
 
 
-def _print_gtw26_header(device: GTW26, detection: Gtw26Detection) -> None:
+def _print_gtw26_header(device: GTW26, detection: GTW26Detection) -> None:
     """Print the detection summary shown above every GTW26 report."""
     layout = device.layout
     assert layout is not None
@@ -222,11 +221,10 @@ async def _run_gtw08(args: argparse.Namespace, unit: CountingUnit) -> int:
 async def _run_gtw26(args: argparse.Namespace, unit: CountingUnit) -> int:
     """Detect a GTW26 gateway, poll it and print the requested sections."""
     unit.set_message_spacing(MESSAGE_SPACING)
-    try:
-        detection = await GTW26.async_detect(unit)
-    except Gtw26ProbeError as err:
+    detection = await GTW26.async_detect(unit)
+    if not detection.success:
         print("Could not detect a GTW26 controller.")  # noqa: T201
-        _print_probe_evidence(err.detection)
+        _print_probe_evidence(detection)
         return 1
 
     detected_layout = RegisterLayout.ISYSTEM if detection.isystem_detected else RegisterLayout.BASE

@@ -1,11 +1,13 @@
 import pytest
-from modbus_connection import ModbusConnectionError, ModbusTimeoutError
+from modbus_connection import ModbusConnectionError, ModbusTimeoutError, ServerDeviceBusyError
 from modbus_connection.exceptions import IllegalDataAddressError
 
+from aio_remeha_modbus.gtw08.errors import RemehaModbusError
 from aio_remeha_modbus.gtw26 import (
     GTW26,
     ControllerGeneration,
-    Gtw26ProbeError,
+    DetectionFailureReason,
+    GTW26ProbeError,
     async_probe,
 )
 
@@ -48,6 +50,8 @@ async def test_probe_base_layout(mock_modbus_unit, type_code, variant):
     detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
+    assert detection.success is True
+    assert detection.failure_reason is None
     assert detection.raw_type_code == type_code
     assert detection.generation is variant
     assert detection.isystem_detected is False
@@ -63,6 +67,8 @@ async def test_probe_isystem_layout(mock_modbus_unit, type_code):
     detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
+    assert detection.success is True
+    assert detection.failure_reason is None
     assert detection.raw_type_code == type_code
     assert detection.generation is (
         ControllerGeneration.GENERATION_3 if type_code == 20 else ControllerGeneration.GENERATION_4
@@ -80,53 +86,72 @@ async def test_probe_accepts_isystem_without_base_identity(mock_modbus_unit):
     detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
+    assert detection.success is True
     assert detection.raw_type_code is None
     assert detection.generation is None
 
 
 @pytest.mark.asyncio
-async def test_probe_rejects_unknown_type(mock_modbus_unit):
+async def test_probe_returns_unknown_model_failure(mock_modbus_unit):
     _seed_base(mock_modbus_unit, 21)
     _seed_isystem(mock_modbus_unit)
 
-    with pytest.raises(Gtw26ProbeError) as caught:
-        await GTW26.async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
-    assert caught.value.detection.raw_type_code == 21
-    assert caught.value.detection.isystem_detected is True
+    assert detection.device is None
+    assert detection.success is False
+    assert detection.failure_reason is DetectionFailureReason.UNKNOWN_MODEL
+    assert detection.raw_type_code == 21
+    assert detection.isystem_detected is True
 
 
 @pytest.mark.asyncio
-async def test_probe_rejects_when_both_layouts_fail(mock_modbus_unit):
+async def test_probe_returns_not_a_gtw26_failure(mock_modbus_unit):
     mock_modbus_unit.fail_read(3, IllegalDataAddressError())
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
     mock_modbus_unit.fail_read(457, IllegalDataAddressError())
     mock_modbus_unit.fail_read(600, IllegalDataAddressError())
     mock_modbus_unit.fail_read(679, IllegalDataAddressError())
 
-    with pytest.raises(Gtw26ProbeError) as caught:
-        await GTW26.async_detect(mock_modbus_unit)
+    detection = await GTW26.async_detect(mock_modbus_unit)
 
-    assert all(block.outcome == "unsupported" for block in caught.value.detection.base_probe)
-    assert all(block.outcome == "unsupported" for block in caught.value.detection.isystem_probe)
+    assert detection.device is None
+    assert detection.success is False
+    assert detection.failure_reason is DetectionFailureReason.NOT_A_GTW26
+    assert all(block.outcome == "unsupported" for block in detection.base_probe)
+    assert all(block.outcome == "unsupported" for block in detection.isystem_probe)
 
 
 @pytest.mark.parametrize(
-    "error",
+    ("error_type", "error"),
     [
-        pytest.param(ModbusConnectionError("link down"), id="connection"),
-        pytest.param(ModbusTimeoutError("timeout"), id="timeout"),
+        pytest.param(ModbusConnectionError, ModbusConnectionError("link down"), id="connection"),
+        pytest.param(ModbusTimeoutError, ModbusTimeoutError("timeout"), id="timeout"),
     ],
 )
 @pytest.mark.asyncio
-async def test_probe_reports_transport_errors(mock_modbus_unit, error):
+async def test_probe_propagates_transport_errors(mock_modbus_unit, error_type, error):
     _seed_isystem(mock_modbus_unit)
     mock_modbus_unit.fail_read(3, error)
     mock_modbus_unit.fail_read(457, error)
 
+    with pytest.raises(error_type):
+        await GTW26.async_detect(mock_modbus_unit)
+
+
+@pytest.mark.asyncio
+async def test_probe_retains_register_errors_as_evidence(mock_modbus_unit):
+    _seed_base(mock_modbus_unit, 24)
+    _seed_isystem(mock_modbus_unit)
+    error = ServerDeviceBusyError("busy")
+    mock_modbus_unit.fail_read(3, error)
+
     detection = await GTW26.async_detect(mock_modbus_unit)
 
     assert isinstance(detection.device, GTW26)
+    assert detection.success is True
+    assert detection.raw_type_code == 24
+    assert detection.generation is ControllerGeneration.GENERATION_4
     block = detection.base_probe[0]
     assert block.outcome == "error"
     assert block.error is error
@@ -135,15 +160,51 @@ async def test_probe_reports_transport_errors(mock_modbus_unit, error):
 
 
 @pytest.mark.asyncio
-async def test_probe_failure_retains_known_variant(mock_modbus_unit):
-    _seed_base(mock_modbus_unit, 24)
+async def test_probe_raises_probe_error_on_failed_detection(mock_modbus_unit):
+    _seed_base(mock_modbus_unit, 21)
     _seed_isystem(mock_modbus_unit)
-    error = ModbusTimeoutError("timeout")
-    mock_modbus_unit.fail_read(3, error)
 
-    detection = await GTW26.async_detect(mock_modbus_unit)
+    with pytest.raises(GTW26ProbeError) as caught:
+        await async_probe(mock_modbus_unit)
 
-    assert isinstance(detection.device, GTW26)
-    assert detection.raw_type_code == 24
-    assert detection.generation is ControllerGeneration.GENERATION_4
-    assert detection.base_probe[0].error is error
+    assert caught.value.detection.failure_reason is DetectionFailureReason.UNKNOWN_MODEL
+    assert caught.value.detection.raw_type_code == 21
+
+
+@pytest.mark.asyncio
+async def test_facade_setup_raises_probe_error_on_failed_detection(mock_modbus_unit):
+    mock_modbus_unit.fail_read(3, IllegalDataAddressError())
+    mock_modbus_unit.fail_read(108, IllegalDataAddressError())
+    mock_modbus_unit.fail_read(457, IllegalDataAddressError())
+    mock_modbus_unit.fail_read(600, IllegalDataAddressError())
+    mock_modbus_unit.fail_read(679, IllegalDataAddressError())
+    device = GTW26("test", mock_modbus_unit)
+
+    with pytest.raises(GTW26ProbeError) as caught:
+        await device.async_ensure_setup()
+
+    assert caught.value.detection.failure_reason is DetectionFailureReason.NOT_A_GTW26
+
+
+@pytest.mark.asyncio
+async def test_health_check_reads_one_register(mock_modbus_unit):
+    mock_modbus_unit.holding[457] = 24
+
+    assert await GTW26.async_health_check(mock_modbus_unit) is None
+
+    blocks = [
+        (event.address, event.count)
+        for event in mock_modbus_unit.read_events
+        if event.register_type == "holding"
+    ]
+    assert blocks == [(457, 1)]
+
+
+@pytest.mark.asyncio
+async def test_health_check_raises_translated_error(mock_modbus_unit):
+    mock_modbus_unit.fail_read(457, ModbusTimeoutError("timeout"))
+
+    with pytest.raises(RemehaModbusError) as caught:
+        await GTW26.async_health_check(mock_modbus_unit)
+
+    assert caught.value.translation_key == "health_check_failed"
