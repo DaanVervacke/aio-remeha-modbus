@@ -1,6 +1,7 @@
 import pytest
 from modbus_connection import ModbusConnectionError, ModbusTimeoutError, ServerDeviceBusyError
 from modbus_connection.exceptions import IllegalDataAddressError
+from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.gtw08.errors import RemehaModbusError
 from aio_remeha_modbus.gtw26 import (
@@ -12,7 +13,7 @@ from aio_remeha_modbus.gtw26 import (
 )
 
 
-def _seed_base(unit, type_code: int) -> None:
+def _seed_base(unit: MockModbusUnit, type_code: int) -> None:
     unit.holding.update(
         {
             3: 400,

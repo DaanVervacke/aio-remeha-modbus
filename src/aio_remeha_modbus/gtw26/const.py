@@ -4,25 +4,22 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Final
 
-# Polling
 MESSAGE_SPACING: Final[float] = 0.05
 """Minimum interval between requests, in seconds."""
 
 GTW26_MAX_SPAN: Final[int] = 40
 """Largest single block read the GTW26 documents, in registers."""
 
-# Mode register masks. Heating and hot-water modes share a register, so a write
-# preserves the other mode's bits.
+# Heating and hot-water modes share a register, so a write preserves the other
+# mode's bits.
 HEATING_MODE_MASK: Final[int] = 0x2F
 HOT_WATER_MODE_MASK: Final[int] = 0x50
 
-# Mode registers per layout.
 BASE_MODE_REGISTERS: Final[tuple[int, int]] = (17, 26)
 ISYSTEM_MODE_REGISTERS: Final[tuple[int, int, int]] = (653, 659, 667)
 BASE_HOT_WATER_REGISTERS: Final[tuple[int, int]] = (17, 26)
 ISYSTEM_HOT_WATER_REGISTER: Final[int] = 659
 
-# Clock writing.
 CLOCK_MARKER: Final[int] = 0xFF00
 """Marker OR-ed into each clock word on the base layout."""
 

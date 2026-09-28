@@ -11,7 +11,7 @@ DaySchedule = list[tuple[time, time]]
 """Comfort periods for one day, as half-hour-aligned `(start, end)` times."""
 
 WeekSchedule = dict[int, DaySchedule]
-"""Comfort periods keyed by weekday, 1 for Monday through 7 for Sunday."""
+"""Comfort periods keyed by weekday, 0 for Monday through 6 for Sunday."""
 
 SLOTS_PER_REGISTER = 16
 REGISTERS_PER_DAY = 3

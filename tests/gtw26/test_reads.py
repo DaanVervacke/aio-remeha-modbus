@@ -309,3 +309,8 @@ async def test_force_circuit_b_overrides_absent_sensor(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit, force_circuit_b=True)
     await diematic.async_update()
     assert diematic.zone_b_present is True
+
+
+def test_base_layout_rejects_force_zone_c(mock_modbus_unit: MockModbusUnit) -> None:
+    with pytest.raises(ValueError, match="force_zone_c"):
+        GTW26("test", mock_modbus_unit, layout=RegisterLayout.BASE, force_zone_c=True)

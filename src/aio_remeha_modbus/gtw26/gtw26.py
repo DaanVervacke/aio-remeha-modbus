@@ -96,12 +96,20 @@ class GTW26(Device):
             force_zone_a: Report zone A as present even without a reported sensor.
             force_zone_b: Report zone B as present even without a reported sensor.
             force_zone_c: Report zone C as present even without a reported sensor.
+                iSystem-only: rejected with `ValueError` when `layout` is
+                `RegisterLayout.BASE`, and inert under auto-detection unless
+                the iSystem layout is detected.
             message_spacing_seconds: The pause between Modbus messages that the
                 controller requires. Defaults to `MESSAGE_SPACING`.
             request_timeout: Require a request timeout on ``unit`` instead of
                 leaving its configured value unchanged.
 
         """
+        if layout is RegisterLayout.BASE and force_zone_c:
+            raise ValueError(
+                "force_zone_c requires the iSystem layout: zone C does not exist on"
+                " RegisterLayout.BASE"
+            )
         super().__init__(unit)
         unit.set_message_spacing(message_spacing_seconds)
         if request_timeout is not None:
@@ -137,6 +145,12 @@ class GTW26(Device):
     @staticmethod
     async def async_detect(unit: ModbusUnit) -> GTW26Detection:
         """Detect the type of GTW26 controller.
+
+        A successful detection returns a fully constructed, ready-to-use `GTW26`
+        device. Constructing it applies the required message spacing through
+        `unit.set_message_spacing`, an intentional convenience, so this is not
+        identical in side-effect profile to GTW08's detection, which only
+        reports a main board descriptor.
 
         Args:
             unit (ModbusUnit): The modbus unit to connect to the device.

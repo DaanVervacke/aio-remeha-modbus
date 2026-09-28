@@ -404,6 +404,19 @@ async def test_isystem_circuit_presence_follows_room_temp(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
+async def test_isystem_force_circuit_c_overrides_absent_sensor(mock_modbus_unit: MockModbusUnit):
+    _seed(mock_modbus_unit)
+    mock_modbus_unit.holding.update({618: 0xFFFF, 619: 0xFFFF})
+    unforced = isystem_gtw26(mock_modbus_unit)
+    await unforced.async_update()
+    assert unforced.zone_c_present is False
+
+    forced = isystem_gtw26(mock_modbus_unit, force_circuit_c=True)
+    await forced.async_update()
+    assert forced.zone_c_present is True
+
+
+@pytest.mark.asyncio
 async def test_isystem_hot_water_presence_follows_temperature(mock_modbus_unit):
     _seed(mock_modbus_unit)
     boiler = isystem_gtw26(mock_modbus_unit)

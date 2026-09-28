@@ -387,7 +387,6 @@ def time_steps(address: int, *, writable: bool | WriteValidator = False) -> Time
     return TimeStepsField(address, writable=writable)
 
 
-# GTW26 field types and validators.
 # Values are stored in tenths with the sign in bit 15, so a negative number is
 # not two's complement. 0xFFFF and 0x8CCC mean the sensor is absent.
 

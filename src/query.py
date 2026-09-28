@@ -129,7 +129,7 @@ def _print_schedule_sections(schedule: ScheduleFacade | None) -> None:
         print(title)  # noqa: T201
         print("-" * len(title))  # noqa: T201
         for weekday in Weekday:
-            ranges = week.get(weekday, [])
+            ranges = week[weekday]
             shown = ", ".join(_format_range(period) for period in ranges) or ("no comfort periods")
             print(f"  {weekday.name.capitalize().ljust(9)}  {shown}")  # noqa: T201
 
