@@ -2,6 +2,7 @@ from datetime import datetime, time
 
 import pytest
 
+from aio_remeha_modbus.gtw08.errors import RemehaApiError
 from aio_remeha_modbus.gtw26 import (
     GTW26,
     HeatingMode,
@@ -373,7 +374,30 @@ async def test_reading_field_is_not_writable(mock_modbus_unit, field):
         (isystem_gtw26, "C"),
     ],
 )
-@pytest.mark.parametrize("mode", [HeatingMode.HOLIDAY, 33, 7, 0x58])
+@pytest.mark.asyncio
+async def test_holiday_heating_mode_is_read_only(mock_modbus_unit, regulator_type, designation):
+    boiler = regulator_type(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
+    writes = []
+    mock_modbus_unit.on_write(writes.append)
+    with pytest.raises(
+        RemehaApiError, check=lambda e: e.translation_key == "heating_mode_read_only"
+    ):
+        await boiler.async_set_heating_mode(designation, HeatingMode.HOLIDAY)
+    assert mock_modbus_unit.read_events == []
+    assert writes == []
+
+
+@pytest.mark.parametrize(
+    ("regulator_type", "designation"),
+    [
+        (base_gtw26, "A"),
+        (base_gtw26, "B"),
+        (isystem_gtw26, "A"),
+        (isystem_gtw26, "B"),
+        (isystem_gtw26, "C"),
+    ],
+)
+@pytest.mark.parametrize("mode", [7, 0x58])
 @pytest.mark.asyncio
 async def test_unsupported_heating_mode_rejected_before_io(
     mock_modbus_unit, regulator_type, designation, mode

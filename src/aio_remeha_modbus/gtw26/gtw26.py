@@ -14,7 +14,7 @@ from modbus_connection import (
 )
 from modbus_connection.model import Component, ComponentGroup, Device, UpdateReport
 
-from aio_remeha_modbus.gtw08.errors import RemehaModbusError
+from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.gtw26.climate_zone import (
     ClimateZone,
     ClimateZoneA,
@@ -347,13 +347,13 @@ class GTW26(Device):
             return BASE_POLICY
         if self._layout is RegisterLayout.ISYSTEM:
             return ISYSTEM_POLICY
-        raise RuntimeError("GTW26 layout has not been set up")
+        raise RemehaApiError("layout_not_set_up")
 
     async def async_set_heating_mode(self, designation: str, mode: HeatingMode) -> None:
         """Set one heating circuit mode while preserving hot-water bits."""
         validated = HeatingMode(mode)
         if validated is HeatingMode.HOLIDAY:
-            raise ValueError("Holiday mode is read-only. Set it on the control panel.")
+            raise RemehaApiError("heating_mode_read_only")
         await self.async_ensure_setup()
         policy = self._policy()
         address = policy.mode_addresses[designation]
