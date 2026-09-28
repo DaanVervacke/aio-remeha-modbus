@@ -439,10 +439,10 @@ class Appliance(RemehaComponent):
         This can be forced (`forced_cooling_mode == True`) or derived (`season_mode` is in a summer variant).
         """
 
-        return self.forced_cooling_mode or self.season_mode in [
+        return self.forced_cooling_mode or self.season_mode in {
             SeasonalMode.SUMMER_NEUTRAL_BAND,
             SeasonalMode.SUMMER,
-        ]
+        }
 
     async def async_set_summer_winter(self, temperature: float):
         """Set the outdoor temperature upper limit for heating.

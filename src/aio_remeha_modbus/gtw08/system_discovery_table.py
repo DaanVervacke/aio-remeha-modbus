@@ -41,13 +41,13 @@ class DeviceBoardType(IntEnum):
     def is_mainboard(self) -> bool:
         """Return whether this value represents a mainboard, a.k.a. the main device."""
 
-        return self in [
+        return self in {
             DeviceBoardType.CU_GH,
             DeviceBoardType.CU_OH,
             DeviceBoardType.EHC,
             DeviceBoardType.EHC_ALT,
             DeviceBoardType.EEC,
-        ]
+        }
 
 
 @dataclass(eq=False)

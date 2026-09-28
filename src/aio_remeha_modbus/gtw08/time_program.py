@@ -196,20 +196,16 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
             )
 
         time_slot_count: bytes = len(value).to_bytes()
-        not_padded_slots: bytes = b"".join(
-            [
-                time_slot_count,
-                *[t.encode() for t in value],
-            ]
-        )
+        not_padded_slots: bytes = b"".join([
+            time_slot_count,
+            *[t.encode() for t in value],
+        ])
 
         # Add padding null-bytes until length is REMEHA_TIME_PROGRAM_BYTE_SIZE bytes.
-        schedule_bytes = b"".join(
-            [
-                not_padded_slots,
-                *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
-            ]
-        )
+        schedule_bytes = b"".join([
+            not_padded_slots,
+            *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
+        ])
 
         return encode_bytes(schedule_bytes, word_order=self.word_order)
 

@@ -194,7 +194,7 @@ def generate_dhw_day_schedule(
         if appliance_seasonal_mode is None
         else (
             [range(10, 23)]
-            if appliance_seasonal_mode in [SeasonalMode.SUMMER_NEUTRAL_BAND, SeasonalMode.SUMMER]
+            if appliance_seasonal_mode in {SeasonalMode.SUMMER_NEUTRAL_BAND, SeasonalMode.SUMMER}
             else [range(10, 17)]
         )
     )
@@ -239,7 +239,7 @@ def generate_dhw_day_schedule(
     # enough kWh to heat the boiler up to its setpoint.
     def _generate_acceptable_hour_blocks():
         usable_hours_list = [hour for r in usable_hours for hour in r]
-        for idx, _ in enumerate(usable_hours_list):
+        for idx in range(len(usable_hours_list)):
             hours_subset: list[int] = (
                 usable_hours_list[idx : idx + BOILER_MAX_ALLOWED_HEAT_DURATION]
                 if len(usable_hours_list) >= idx + BOILER_MAX_ALLOWED_HEAT_DURATION
@@ -247,7 +247,7 @@ def generate_dhw_day_schedule(
             )
 
             # Calculate the total yield in kwh for the 3-hour block
-            total_yield: int = sum([forecasted_kwh_yield.get(h, 0) for h in hours_subset])
+            total_yield: int = sum(forecasted_kwh_yield.get(h, 0) for h in hours_subset)
 
             if total_yield >= default_required_heating_kwh:
                 # Only yield the subset if it is a closed range
@@ -273,9 +273,9 @@ def generate_dhw_day_schedule(
     # The remaining hours are unaccepted.
     unaccepted_hour_blocks: list[list[int]] = [
         list(group)
-        for group in consecutive_groups(
-            [h for h in range(24) if h not in {hour for r in accepted_hour_blocks for hour in r}]
-        )
+        for group in consecutive_groups([
+            h for h in range(24) if h not in {hour for r in accepted_hour_blocks for hour in r}
+        ])
     ]
 
     # Generate the timeslots using the accepted hours yielding enough kWh.

@@ -159,9 +159,9 @@ def get_current_timeslot(
 
     return (
         next(
-            reversed(
-                [time_slot for time_slot in time_slots if time_slot.switch_time.hour <= now.hour]
-            ),
+            reversed([
+                time_slot for time_slot in time_slots if time_slot.switch_time.hour <= now.hour
+            ]),
             None,
         )
         if time_slots is not None
