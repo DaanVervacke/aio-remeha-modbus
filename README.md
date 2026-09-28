@@ -94,7 +94,7 @@ wrong-device answers; only transient `ModbusError`s propagate. The register layo
 and the controller generation are detected automatically; pass a `RegisterLayout` to the `GTW26`
 constructor to override the detected layout.
 
-GTW-26 controllers require a small pause between Modbus messages. The `GTW26` constructor applies
+GTW-26 controllers need at least 50 ms between Modbus messages. The `GTW26` constructor applies
 this spacing automatically through its `message_spacing_seconds` parameter; pass a different value
 to override it.
 
@@ -109,8 +109,8 @@ zone `C` only exists on `isystem` layouts. The `zone_a_present`, `zone_b_present
 and `hot_water_present` properties report whether the component reported a sensor reading (a
 non-`None` decoded value); all of them return `False` until the first `await GTW26.async_update()`
 call. The `force_zone_a`, `force_zone_b` and `force_zone_c` constructor flags report a zone as
-present even without a sensor reading; zone C only exists on `isystem` layouts, so passing
-`force_zone_c=True` together with an explicit `layout="base"` raises `ValueError`.
+present even without a sensor reading; passing `force_zone_c=True` together with an explicit
+`layout="base"` raises `ValueError`.
 
 ### GTW-26 schedules
 Weekly comfort schedules are available through `GTW26.schedule` as a `ScheduleFacade` on `isystem`

@@ -1,7 +1,7 @@
 """GTW26 API exceptions.
 
-The translateable base lives in `gtw08.errors` and is reused here, so a caller
-handles one error shape for both gateways.
+The translateable base is `gtw08.errors`, reused here so a caller handles
+one error shape for both gateways.
 """
 
 from typing import TYPE_CHECKING

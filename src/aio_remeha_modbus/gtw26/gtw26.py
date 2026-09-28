@@ -148,9 +148,8 @@ class GTW26(Device):
 
         A successful detection returns a fully constructed, ready-to-use `GTW26`
         device. Constructing it applies the required message spacing through
-        `unit.set_message_spacing`, an intentional convenience, so this is not
-        identical in side-effect profile to GTW08's detection, which only
-        reports a main board descriptor.
+        `unit.set_message_spacing`; see `GTW26Detection` for how this differs
+        from GTW08's detection.
 
         Args:
             unit (ModbusUnit): The modbus unit to connect to the device.

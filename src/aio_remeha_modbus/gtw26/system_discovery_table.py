@@ -106,8 +106,7 @@ class GTW26Detection:
     """Describe a GTW26 detection attempt and its probe evidence.
 
     On success, `device` is a fully constructed, ready-to-use `GTW26` facade.
-    Constructing it applies the required message spacing on the unit, an
-    intentional convenience, so this is not identical in side-effect profile to
+    Constructing it applies the required message spacing on the unit, unlike
     GTW08's detection, which only reports a main board descriptor.
     """
 
