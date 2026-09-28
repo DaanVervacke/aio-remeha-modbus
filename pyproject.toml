@@ -54,6 +54,7 @@ docs = [
 omit = ["tests/*"]
 
 [tool.ruff]
+preview = true # Markdown formatting
 line-length = 100
 
 [tool.ruff.lint]

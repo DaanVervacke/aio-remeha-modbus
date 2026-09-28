@@ -42,6 +42,9 @@ Query all components
 $ remeha-query --transport serial socket://192.168.1.2:8899 --all
 ```
 
+### GTW-08 detection
+To detect if a GTW-08 is behind a `ModbusUnit`, call `await GTW08.async_detect()`.
+
 #### Caching
 To retrieve fetch data from modbus, call `await GTW08.async_update()` explicitly. After that, the values are retained until the next update call.
 
