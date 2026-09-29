@@ -14,18 +14,16 @@ from aio_remeha_modbus.gtw26 import (
 
 
 def _seed_base(unit: MockModbusUnit, type_code: int) -> None:
-    unit.holding.update(
-        {
-            3: 400,
-            4: 14,
-            5: 30,
-            6: 2,
-            108: 10,
-            109: 9,
-            110: 25,
-            457: type_code,
-        }
-    )
+    unit.holding.update({
+        3: 400,
+        4: 14,
+        5: 30,
+        6: 2,
+        108: 10,
+        109: 9,
+        110: 25,
+        457: type_code,
+    })
     unit.fail_read(600, IllegalDataAddressError())
     unit.fail_read(679, IllegalDataAddressError())
 

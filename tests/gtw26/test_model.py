@@ -50,7 +50,7 @@ class TestGtw26ComponentWrite:
         with patch.object(Component, "write", new_callable=AsyncMock):
             await component.write("test_register", 42)
 
-        assert component._values["test_register"] == 42  # noqa: SLF001
+        assert component._values["test_register"] == 42
 
     @pytest.mark.asyncio
     async def test_write_register_field_retains_validator_coerced_value(
@@ -63,7 +63,7 @@ class TestGtw26ComponentWrite:
             await component.write("clamped_register", 40)
 
         mock_parent_write.assert_called_once_with(field="clamped_register", value=15)
-        assert component._values["clamped_register"] == 15  # noqa: SLF001
+        assert component._values["clamped_register"] == 15
 
     @pytest.mark.asyncio
     async def test_write_bit_field_retains_value_in_bits(
@@ -71,13 +71,13 @@ class TestGtw26ComponentWrite:
     ) -> None:
         """Test that writing a bit field retains the value in _bits."""
         component = MockGtw26Component(mock_modbus_unit)
-        component._bit_fields = {"test_bit": 200}  # noqa: SLF001
-        component._bits = {}  # noqa: SLF001
+        component._bit_fields = {"test_bit": 200}
+        component._bits = {}
 
         with patch.object(Component, "write", new_callable=AsyncMock):
             await component.write("test_bit", True)
 
-        assert component._bits["test_bit"] is True  # noqa: SLF001
+        assert component._bits["test_bit"] is True
 
     @pytest.mark.asyncio
     async def test_write_unknown_field_raises_attribute_error(
@@ -124,4 +124,4 @@ class TestGtw26ComponentWrite:
 
         assert writes == []
         assert 2 not in mock_modbus_unit.holding
-        assert "ranged_register" not in component._values  # noqa: SLF001
+        assert "ranged_register" not in component._values
