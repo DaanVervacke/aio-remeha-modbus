@@ -8,9 +8,7 @@ from typing import Any
 from modbus_connection import (
     ModbusConnectionError,
     ModbusError,
-    ModbusTimeoutError,
     ModbusUnit,
-    ServerDeviceBusyError,
 )
 from modbus_connection.model import Component, ComponentGroup, Device, UpdateReport
 
@@ -68,7 +66,34 @@ __all__ = ["GTW26", "async_detect", "async_probe"]
 
 
 class GTW26(Device):
-    """Represent a GTW26 gateway over a Modbus unit."""
+    """Represent a GTW26 gateway over a Modbus unit.
+
+    Note:
+        This class does not perform automatic retries on transient errors.
+        Callers who want retry behavior should wrap their ModbusUnit with
+        RetryingModbusUnit from aio_remeha_modbus.helpers.modbus before
+        passing it to the constructor.
+
+    Attributes:
+        sensors: Sensor readings component. None until setup complete.
+        hot_water: Hot water component. None until setup complete.
+        climate_zones: Dict of climate zone components keyed by designation.
+        settings: Settings component. None until setup complete.
+        config: Configuration component (iSystem only). None until setup complete.
+        diagnostics: Diagnostics component (iSystem only). None until setup complete.
+        outputs: Outputs component. None until setup complete.
+        service: Service component. None until setup complete.
+        identity: Identity component. None until setup complete.
+        schedule: Schedule component (iSystem only). None until setup complete.
+        _pool: ComponentGroup for pooled reads of regular bundles.
+        _bundles: Dict of all component bundles by name.
+        _read_once: Frozenset of bundle names to read only once.
+        _pending_once: Dict of pending one-time read bundles.
+        _write_lock: Lock for serializing write operations.
+        _setup_complete: Flag indicating setup has completed.
+        _setup_lock: Lock for thread-safe setup.
+
+    """
 
     def __init__(
         self,
@@ -289,20 +314,14 @@ class GTW26(Device):
         if self._pool is None:
             return
         regular = [name for name in self._bundles if name not in self._read_once]
-        for _ in range(2):
-            try:
-                await self._pool.async_update()
-            except ModbusConnectionError:
-                raise
-            except ModbusTimeoutError, ServerDeviceBusyError:
-                continue
-            except ModbusError:
-                await self._poll_individually(regular, updated, failed)
-                return
-            else:
-                updated.update(regular)
-                return
-        await self._poll_individually(regular, updated, failed)
+        try:
+            await self._pool.async_update()
+        except ModbusConnectionError:
+            raise
+        except ModbusError:
+            await self._poll_individually(regular, updated, failed)
+        else:
+            updated.update(regular)
 
     async def _poll_individually(
         self, names: list[str], updated: set[str], failed: dict[str, ModbusError]

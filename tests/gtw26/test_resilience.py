@@ -10,6 +10,7 @@ from modbus_connection.exceptions import IllegalDataAddressError
 
 from aio_remeha_modbus.gtw26 import GTW26, HeatingMode, HotWaterMode
 from aio_remeha_modbus.gtw26.const import SCHEDULE_BASES, ControllerGeneration, RegisterLayout
+from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
 
 
 def _seed(unit) -> None:
@@ -114,7 +115,7 @@ async def test_regulator_configures_message_spacing(mock_modbus_unit):
 
 @pytest.mark.parametrize("error", [ModbusTimeoutError(), ServerDeviceBusyError()])
 @pytest.mark.asyncio
-async def test_pooled_read_retries_timeout_busy_once_then_falls_back(mock_modbus_unit, error):
+async def test_pooled_read_fails_on_timeout_busy_then_falls_back(mock_modbus_unit, error):
     _seed_isystem(mock_modbus_unit)
     mock_modbus_unit.fail_read(601, error)
     boiler = isystem_gtw26(mock_modbus_unit)
@@ -123,19 +124,13 @@ async def test_pooled_read_retries_timeout_busy_once_then_falls_back(mock_modbus
     assert "sensors" in report.failed
     assert "sensors" not in report.updated
     assert "climate_zone_a" in report.updated
-    blocks = [
-        (event.address, event.count)
-        for event in mock_modbus_unit.read_events
-        if event.register_type == "holding"
-    ]
-    first = next(i for i, (start, count) in enumerate(blocks) if start <= 601 < start + count)
-    assert blocks[: first + 1] == blocks[first + 1 : 2 * (first + 1)]
 
 
 @pytest.mark.asyncio
-async def test_pooled_read_recovers_after_single_timeout(mock_modbus_unit):
+async def test_pooled_read_recovers_with_retrying_unit(mock_modbus_unit):
     _seed_isystem(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    retrying_unit = RetryingModbusUnit(mock_modbus_unit)
+    boiler = isystem_gtw26(retrying_unit)
     original = mock_modbus_unit.read_holding_registers
     attempts = 0
 
@@ -149,7 +144,9 @@ async def test_pooled_read_recovers_after_single_timeout(mock_modbus_unit):
     mock_modbus_unit.read_holding_registers = flaky
     report = await boiler.async_update()
 
+    # Verify that RetryingModbusUnit retried the failing read
     assert report.complete
+    assert attempts > 1  # First attempt fails, subsequent attempts succeed
 
 
 @pytest.mark.asyncio
