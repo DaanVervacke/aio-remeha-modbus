@@ -2,7 +2,6 @@
 
 from modbus_connection.model import bit, integer
 
-import aio_remeha_modbus.gtw08  # noqa: F401
 from aio_remeha_modbus.gtw26.const import BASE_WINDOWS, ISYSTEM_WINDOWS, M3_GT_FAULTS
 from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.helpers.fields import fault_code, float10, multiplied_integer

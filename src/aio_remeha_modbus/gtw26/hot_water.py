@@ -2,8 +2,8 @@
 
 from modbus_connection.model import integer
 
-import aio_remeha_modbus.gtw08  # noqa: F401
 from aio_remeha_modbus.gtw26.const import (
+    BASE_HOT_WATER_REGISTERS,
     BASE_WINDOWS,
     HOT_WATER_MODE_MASK,
     ISYSTEM_HOT_WATER_REGISTER,
@@ -37,7 +37,8 @@ class HotWater(Gtw26Component):
     priority = masked_enum(60, 0xFF, HotWaterPriority)
     pump_delay = integer(61, signed=False, writable=_PUMP_DELAY_RANGE, force_fc16=True, unit="min")
     temperature_dpsm = float10(459, unit="°C")
-    mode = masked_enum(17, HOT_WATER_MODE_MASK, HotWaterMode)
+    # The base layout reports hot-water mode only in the first shared mode register.
+    mode = masked_enum(BASE_HOT_WATER_REGISTERS[0], HOT_WATER_MODE_MASK, HotWaterMode)
     comfort_target = float10(59, writable=_HOT_WATER, force_fc16=True, unit="°C")
     reduced_target = float10(96, writable=_HOT_WATER, force_fc16=True, unit="°C")
 

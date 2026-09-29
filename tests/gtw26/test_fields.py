@@ -4,10 +4,10 @@ import pytest
 
 from aio_remeha_modbus.gtw26 import C230_FAULTS, M3_GT_FAULTS
 from aio_remeha_modbus.gtw26.const import ActiveMode, HeatingMode, HotWaterMode
+from aio_remeha_modbus.gtw26.fields import controller_type_field
 from aio_remeha_modbus.gtw26.schedule import ScheduleDayField
 from aio_remeha_modbus.helpers.fields import (
     Float10Field,
-    controller_type_field,
     masked_enum,
     snap_clamp,
 )

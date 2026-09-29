@@ -3,23 +3,30 @@
 from modbus_connection.model import NumberField, bit, integer
 
 from aio_remeha_modbus.gtw26.const import (
+    BASE_MODE_REGISTERS,
     BASE_WINDOWS,
     HEATING_MODE_MASK,
+    ISYSTEM_MODE_REGISTERS,
     ISYSTEM_WINDOWS,
     ActiveMode,
     CircuitType,
     HeatingMode,
 )
+from aio_remeha_modbus.gtw26.fields import (
+    derogation_until_end,
+    permanent_derogation,
+    time_program,
+)
 from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.helpers.fields import (
-    derogation_until_end,
     enum_value,
     float10,
     masked_enum,
-    permanent_derogation,
     snap_clamp,
-    time_program,
 )
+
+_BASE_ZONE_A, _BASE_ZONE_B = BASE_MODE_REGISTERS
+_ISYSTEM_ZONE_A, _ISYSTEM_ZONE_B, _ISYSTEM_ZONE_C = ISYSTEM_MODE_REGISTERS
 
 _ZONE = snap_clamp(0.5, 5.0, 30.0)
 _SLOPE = snap_clamp(0.1, 0.0, 4.0)
@@ -42,7 +49,7 @@ class ClimateZoneA(ClimateZone):
 
     room_temperature = float10(18, unit="°C")
     calculated_temperature = float10(21, unit="°C")
-    mode = masked_enum(17, HEATING_MODE_MASK, HeatingMode)
+    mode = masked_enum(_BASE_ZONE_A, HEATING_MODE_MASK, HeatingMode)
     pump_active = bit(427, 4)
     ambient_influence = integer(19, signed=False)
     heating_curve_slope = float10(20, writable=_SLOPE, force_fc16=True, unit="K/K")
@@ -57,7 +64,7 @@ class ClimateZoneB(ClimateZone):
     room_temperature = float10(27, unit="°C")
     calculated_temperature = float10(32, unit="°C")
     supply_temperature = float10(33, unit="°C")
-    mode = masked_enum(26, HEATING_MODE_MASK, HeatingMode)
+    mode = masked_enum(_BASE_ZONE_B, HEATING_MODE_MASK, HeatingMode)
     pump_active = bit(428, 4)
     ambient_influence = integer(28, signed=False)
     min_temperature = float10(30, unit="°C")
@@ -81,11 +88,15 @@ class ISystemClimateZoneA(ISystemClimateZone):
     room_temperature = float10(614, unit="°C")
     calculated_temperature = float10(615, unit="°C")
     supply_temperature = float10(621, unit="°C")
-    mode = masked_enum(653, HEATING_MODE_MASK, HeatingMode)
+    mode = masked_enum(_ISYSTEM_ZONE_A, HEATING_MODE_MASK, HeatingMode)
     circuit_type = enum_value(296, CircuitType)
     active_mode = masked_enum(637, 0x06, ActiveMode)
-    permanent_derogation = NumberField[bool | None](653, signed=False, convert=permanent_derogation)
-    derogation_until_end = NumberField[bool | None](653, signed=False, convert=derogation_until_end)
+    permanent_derogation = NumberField[bool | None](
+        _ISYSTEM_ZONE_A, signed=False, convert=permanent_derogation
+    )
+    derogation_until_end = NumberField[bool | None](
+        _ISYSTEM_ZONE_A, signed=False, convert=derogation_until_end
+    )
     program = time_program(231)
     pump_active = bit(427, 4)
     ambient_influence = integer(654, signed=False)
@@ -101,11 +112,15 @@ class ISystemClimateZoneB(ISystemClimateZone):
     room_temperature = float10(616, unit="°C")
     calculated_temperature = float10(617, unit="°C")
     supply_temperature = float10(605, unit="°C")
-    mode = masked_enum(659, HEATING_MODE_MASK, HeatingMode)
+    mode = masked_enum(_ISYSTEM_ZONE_B, HEATING_MODE_MASK, HeatingMode)
     circuit_type = enum_value(297, CircuitType)
     active_mode = masked_enum(638, 0x06, ActiveMode)
-    permanent_derogation = NumberField[bool | None](659, signed=False, convert=permanent_derogation)
-    derogation_until_end = NumberField[bool | None](659, signed=False, convert=derogation_until_end)
+    permanent_derogation = NumberField[bool | None](
+        _ISYSTEM_ZONE_B, signed=False, convert=permanent_derogation
+    )
+    derogation_until_end = NumberField[bool | None](
+        _ISYSTEM_ZONE_B, signed=False, convert=derogation_until_end
+    )
     all_circuits_derogation = bit(659, 7)
     program = time_program(232)
     pump_active = bit(428, 4)
@@ -125,12 +140,16 @@ class ISystemClimateZoneC(ISystemClimateZone):
 
     room_temperature = float10(618, unit="°C")
     calculated_temperature = float10(619, unit="°C")
-    mode = masked_enum(667, HEATING_MODE_MASK, HeatingMode)
+    mode = masked_enum(_ISYSTEM_ZONE_C, HEATING_MODE_MASK, HeatingMode)
     circuit_type = enum_value(360, CircuitType)
     active_mode = masked_enum(639, 0x06, ActiveMode)
     program = time_program(233)
-    permanent_derogation = NumberField[bool | None](667, signed=False, convert=permanent_derogation)
-    derogation_until_end = NumberField[bool | None](667, signed=False, convert=derogation_until_end)
+    permanent_derogation = NumberField[bool | None](
+        _ISYSTEM_ZONE_C, signed=False, convert=permanent_derogation
+    )
+    derogation_until_end = NumberField[bool | None](
+        _ISYSTEM_ZONE_C, signed=False, convert=derogation_until_end
+    )
     all_circuits_derogation = bit(667, 7)
     ambient_influence = integer(668, signed=False)
     heating_curve_slope = float10(669, writable=_SLOPE, force_fc16=True, unit="K/K")

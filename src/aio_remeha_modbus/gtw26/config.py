@@ -5,9 +5,6 @@ from typing import Self
 
 from modbus_connection.model import bit, integer
 
-# Import the GTW08 package before the shared field helpers.  The existing GTW08
-# package imports those helpers from its module initialisation path.
-import aio_remeha_modbus.gtw08  # noqa: F401
 from aio_remeha_modbus.gtw26.const import (
     BASE_WINDOWS,
     ISYSTEM_WINDOWS,
@@ -58,13 +55,9 @@ class Settings(Gtw26Component):
     primary_boiler_temperature = float10(121, unit="°C")
 
 
-class Outputs(Gtw26Component):
-    """Read-only output words and documented secondary output bits."""
+class _SecondaryOutputBits:
+    """Secondary output bits of register 475, identical in both layouts."""
 
-    register_ranges = BASE_WINDOWS
-
-    primary = integer(474, signed=False)
-    secondary = integer(475, signed=False)
     dhw_pump_active = bit(475, 0)
     circuit_a_pump_active = bit(475, 1)
     circuit_a_valve_opening = bit(475, 2)
@@ -79,6 +72,15 @@ class Outputs(Gtw26Component):
     auxiliary_2_pump_active = bit(475, 11)
     auxiliary_3_pump_active = bit(475, 12)
     phone_output_active = bit(475, 13)
+
+
+class Outputs(_SecondaryOutputBits, Gtw26Component):
+    """Read-only output words and documented secondary output bits."""
+
+    register_ranges = BASE_WINDOWS
+
+    primary = integer(474, signed=False)
+    secondary = integer(475, signed=False)
 
 
 class Service(Gtw26Component):
@@ -151,7 +153,7 @@ class Config(Gtw26Component):
     three_way_valve_temperature_shift = float10(426, unit="°C")
 
 
-class ISystemOutputs(Gtw26Component):
+class ISystemOutputs(_SecondaryOutputBits, Gtw26Component):
     """Read-only iSystem output words and documented output bits."""
 
     register_ranges = ISYSTEM_WINDOWS
@@ -163,20 +165,6 @@ class ISystemOutputs(Gtw26Component):
     hydraulic_valve_closing = bit(474, 3)
     boiler_pump_active = bit(474, 4)
     secondary_pump_active = bit(735, 3)
-    dhw_pump_active = bit(475, 0)
-    circuit_a_pump_active = bit(475, 1)
-    circuit_a_valve_opening = bit(475, 2)
-    circuit_a_valve_closing = bit(475, 3)
-    circuit_b_pump_active = bit(475, 4)
-    circuit_b_valve_opening = bit(475, 5)
-    circuit_b_valve_closing = bit(475, 6)
-    circuit_c_pump_active = bit(475, 7)
-    circuit_c_valve_opening = bit(475, 8)
-    circuit_c_valve_closing = bit(475, 9)
-    auxiliary_1_pump_active = bit(475, 10)
-    auxiliary_2_pump_active = bit(475, 11)
-    auxiliary_3_pump_active = bit(475, 12)
-    phone_output_active = bit(475, 13)
 
 
 class Diagnostics(Gtw26Component):

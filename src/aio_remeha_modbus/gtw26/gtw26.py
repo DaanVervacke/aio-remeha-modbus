@@ -49,6 +49,7 @@ from aio_remeha_modbus.gtw26.const import (
 )
 from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
 from aio_remeha_modbus.gtw26.hot_water import HotWater, ISystemHotWater
+from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.gtw26.schedule import ScheduleFacade
 from aio_remeha_modbus.gtw26.sensors import ISystemSensors, Sensors
 from aio_remeha_modbus.gtw26.system_discovery_table import (
@@ -565,6 +566,7 @@ class GTW26(Device):
 
     async def _nudge_panel(self) -> None:
         """Toggle the generation-4 panel refresh register after a mode write."""
+        # The 0.5 s pause between the toggles has no cited source in the GTW-26 documentation.
         await self._unit.write_registers(PANEL_NUDGE_REGISTER, [1])
         await asyncio.sleep(0.5)
         await self._unit.write_registers(PANEL_NUDGE_REGISTER, [0])
@@ -603,35 +605,54 @@ class GTW26(Device):
         except ModbusError as err:
             raise RemehaModbusError("health_check_failed") from err
 
+    def _present(
+        self,
+        component: Gtw26Component | None,
+        forced: bool,
+        fields: tuple[str, ...],
+        layout_fields: tuple[tuple[RegisterLayout, str], ...],
+    ) -> bool:
+        """Report presence from the forced flag and the component's answered fields.
+
+        A missing component counts as present only when forced, so a forced
+        zone reports present before the first poll. `layout_fields` names
+        fields that only count on one register layout.
+        """
+        if component is None:
+            return forced
+        if forced:
+            return True
+        if any(getattr(component, name, None) is not None for name in fields):
+            return True
+        return any(
+            self._layout is layout and getattr(component, name, None) is not None
+            for layout, name in layout_fields
+        )
+
     @property
     def zone_a_present(self) -> bool:
         """Whether zone A has a reported sensor or is forced present."""
-        zone = self.climate_zones.get("A")
-        if zone is None:
-            return self._force_zone_a
-        return bool(
-            self._force_zone_a
-            or zone.room_temperature is not None
-            or zone.calculated_temperature is not None
-            or (
-                self._layout is RegisterLayout.ISYSTEM
-                and getattr(zone, "supply_temperature", None) is not None
-            )
+        return self._present(
+            self.climate_zones.get("A"),
+            self._force_zone_a,
+            ("room_temperature", "calculated_temperature"),
+            ((RegisterLayout.ISYSTEM, "supply_temperature"),),
         )
 
     @property
     def zone_b_present(self) -> bool:
         """Whether zone B has a reported sensor or is forced present."""
-        zone = self.climate_zones.get("B")
-        if zone is None:
-            return self._force_zone_b
-        return bool(
-            self._force_zone_b
-            or zone.room_temperature is not None
-            or zone.calculated_temperature is not None
-            or getattr(zone, "supply_temperature", None) is not None
-            or getattr(zone, "min_temperature", None) is not None
-            or getattr(zone, "max_temperature", None) is not None
+        return self._present(
+            self.climate_zones.get("B"),
+            self._force_zone_b,
+            (
+                "room_temperature",
+                "calculated_temperature",
+                "supply_temperature",
+                "min_temperature",
+                "max_temperature",
+            ),
+            (),
         )
 
     @property
@@ -642,21 +663,19 @@ class GTW26(Device):
         zone = self.climate_zones.get("C")
         if zone is None:
             return False
-        return bool(
-            self._force_zone_c
-            or zone.room_temperature is not None
-            or zone.calculated_temperature is not None
+        return self._present(
+            zone,
+            self._force_zone_c,
+            ("room_temperature", "calculated_temperature"),
+            (),
         )
 
     @property
     def hot_water_present(self) -> bool:
         """Whether hot water has a reported temperature sensor."""
-        if self.hot_water is None:
-            return False
-        return bool(
-            self.hot_water.temperature is not None
-            or (
-                self._layout is RegisterLayout.BASE
-                and getattr(self.hot_water, "temperature_dpsm", None) is not None
-            )
+        return self._present(
+            self.hot_water,
+            False,
+            ("temperature",),
+            ((RegisterLayout.BASE, "temperature_dpsm"),),
         )

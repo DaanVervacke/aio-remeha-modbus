@@ -17,8 +17,8 @@ HOT_WATER_MODE_MASK: Final[int] = 0x50
 
 BASE_MODE_REGISTERS: Final[tuple[int, int]] = (17, 26)
 ISYSTEM_MODE_REGISTERS: Final[tuple[int, int, int]] = (653, 659, 667)
-BASE_HOT_WATER_REGISTERS: Final[tuple[int, int]] = (17, 26)
-ISYSTEM_HOT_WATER_REGISTER: Final[int] = 659
+BASE_HOT_WATER_REGISTERS: Final[tuple[int, int]] = BASE_MODE_REGISTERS
+ISYSTEM_HOT_WATER_REGISTER: Final[int] = ISYSTEM_MODE_REGISTERS[1]
 
 CLOCK_MARKER: Final[int] = 0xFF00
 """Marker OR-ed into each clock word on the base layout."""
@@ -241,13 +241,13 @@ class LayoutPolicy:
 
 
 BASE_POLICY = LayoutPolicy(
-    mode_addresses={"A": 17, "B": 26},
+    mode_addresses=dict(zip(("A", "B"), BASE_MODE_REGISTERS, strict=True)),
     hot_water_addresses=BASE_HOT_WATER_REGISTERS,
     clock=ClockPolicy(time_address=4, date_address=108, uses_marker=True),
     nudges_panel=True,
 )
 ISYSTEM_POLICY = LayoutPolicy(
-    mode_addresses={"A": 653, "B": 659, "C": 667},
+    mode_addresses=dict(zip(("A", "B", "C"), ISYSTEM_MODE_REGISTERS, strict=True)),
     hot_water_addresses=(ISYSTEM_HOT_WATER_REGISTER,),
     clock=ClockPolicy(time_address=679, date_address=None, uses_marker=False),
     nudges_panel=False,

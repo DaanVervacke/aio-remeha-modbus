@@ -400,9 +400,8 @@ def time_steps(address: int, *, writable: bool | WriteValidator = False) -> Time
 
 _SIGN_BIT = 0x8000
 _MAGNITUDE = 0x7FFF
-_NO_SENSOR = frozenset((0xFFFF, 0x8CCC))
-_PROGRAMS = 4
-_DAYS = 7
+NO_SENSOR = frozenset((0xFFFF, 0x8CCC))
+"""Raw values that mean a sensor or value is absent."""
 
 
 class Float10Field(RegisterField[float | None]):
@@ -413,7 +412,7 @@ class Float10Field(RegisterField[float | None]):
     @override
     def decode(self, words: list[int], scale_exponent: int | None = None) -> float | None:
         raw = words[0]
-        if raw in _NO_SENSOR or raw in self.none_values:
+        if raw in NO_SENSOR or raw in self.none_values:
             return None
         return -(raw & _MAGNITUDE) / 10 if raw >= _SIGN_BIT else raw / 10
 
@@ -562,27 +561,6 @@ def code_map(address: int, table: dict[int, str]) -> NumberField[str | int]:
     return NumberField(address, signed=False, convert=_CodeLabel(table, frozenset()))
 
 
-def controller_type_field() -> NumberField[str | int]:
-    """Read register 457 as a controller type label, unknown codes kept as raw ints."""
-    from aio_remeha_modbus.gtw26.const import MODEL_CODES  # noqa: PLC0415
-
-    return code_map(457, MODEL_CODES)
-
-
-class _TimeProgram:
-    """Map a program-selection register to the P1 to P4 program it selects."""
-
-    def __call__(self, raw: int) -> int | None:
-        if raw in _NO_SENSOR:
-            return None
-        return (raw & 0xFF) // _DAYS % _PROGRAMS + 1
-
-
-def time_program(address: int) -> NumberField[int | None]:
-    """Read the selected heating program as a number from 1 to 4."""
-    return NumberField(address, signed=False, convert=_TimeProgram())
-
-
 def snap_clamp(step: float, low: float, high: float) -> WriteValidator:
     """Round requests to `step` and keep them between `low` and `high`."""
 
@@ -612,32 +590,3 @@ def int_range(low: int, high: int) -> WriteValidator:
         return result
 
     return validate
-
-
-def permanent_derogation(raw: int) -> bool | None:
-    """Decode verified heating override modes independently of hot-water bits.
-
-    `True` for a permanent day or night override, `False` for automatic mode and
-    temporary overrides, and `None` for modes whose override semantics are unverified.
-    """
-    from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
-
-    mode = raw & HEATING_MODE_MASK
-    if mode in {HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT}:
-        return True
-    if mode in {HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT}:
-        return False
-    return None
-
-
-def derogation_until_end(raw: int) -> bool | None:
-    """Decode the documented timed-override bit for known heating modes."""
-    # The 0x20 bit is unverified: the annex documents bit 4 as the timed-override flag, and bits 5+ are undocumented.
-    from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
-
-    mode = raw & HEATING_MODE_MASK
-    if mode in {HeatingMode.PERM_DAY, HeatingMode.PERM_NIGHT}:
-        return False
-    if mode in {HeatingMode.AUTO, HeatingMode.TEMP_DAY, HeatingMode.TEMP_NIGHT}:
-        return bool(raw & 0x20)
-    return None

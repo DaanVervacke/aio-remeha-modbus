@@ -26,8 +26,8 @@ from aio_remeha_modbus.gtw26.const import (
     RegisterLayout,
 )
 from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
+from aio_remeha_modbus.gtw26.fields import controller_type_field
 from aio_remeha_modbus.gtw26.model import Gtw26Component
-from aio_remeha_modbus.helpers.fields import controller_type_field
 
 if TYPE_CHECKING:
     from aio_remeha_modbus.gtw26.gtw26 import GTW26
@@ -198,6 +198,8 @@ async def _async_probe(
             isystem_probe=isystem_probe,
         )
 
+    # This check runs before the iSystem probe, so a known-but-generationless code fails an
+    # otherwise successful iSystem probe; the ordering is unverified against the GTW-26 documentation.
     if type_code is not None and type_code in MODEL_CODES and generation is None:
         return result(None, DetectionFailureReason.UNKNOWN_MODEL)
     if isystem_detected:
