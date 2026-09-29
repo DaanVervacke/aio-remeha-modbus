@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from datetime import time
 from enum import IntEnum, IntFlag
-from typing import Any, overload, override
+from typing import TYPE_CHECKING, Any, overload, override
 
 from modbus_connection import WordOrder
 from modbus_connection.model import (
@@ -16,7 +16,8 @@ from modbus_connection.model import (
     integer,
 )
 
-from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+if TYPE_CHECKING:
+    from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
 def decode_bytes(words: list[int], word_order: WordOrder = "big") -> bytes:
@@ -149,6 +150,8 @@ class TimeStepsField(RegisterField[time]):
 
     @override
     def decode(self, words: list[int], scale_exponent: int | None = None) -> time | None:
+        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+
         steps = words[0]
         if (steps & 0xFF) == TimeStepsField.nan:
             return None
@@ -157,6 +160,8 @@ class TimeStepsField(RegisterField[time]):
 
     @override
     def encode(self, value: time | None, scale_exponent: int | None = None) -> list[int]:
+        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+
         if value is None:
             return [TimeStepsField.nan]
 
