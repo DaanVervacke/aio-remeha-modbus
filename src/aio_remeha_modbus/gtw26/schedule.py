@@ -85,7 +85,12 @@ class WeekProgram(Gtw26Component):
         }
 
     async def async_set_day(self, weekday: Weekday, periods: list[ComfortPeriod]) -> None:
-        """Write one weekday of the comfort program."""
+        """Write one weekday of the comfort program.
+
+        Raises:
+            ValueError: If a period is reversed or not half-hour aligned.
+
+        """
         day = Weekday(weekday)
         await self.write(WEEKDAY_FIELDS[day], [(period.start, period.end) for period in periods])
         if self._on_day_written is not None:
@@ -114,19 +119,40 @@ class ScheduleFacade:
         return self._programs
 
     async def async_update(self, name: str) -> None:
-        """Poll one named weekly program."""
+        """Poll one named weekly program.
+
+        Raises:
+            ValueError: If ``name`` is not a supported schedule.
+
+        """
         await self._require_schedule(name).async_update()
 
     def get_day(self, schedule: str, weekday: Weekday) -> list[ComfortPeriod]:
-        """Return one weekday from a named schedule."""
+        """Return one weekday from a named schedule.
+
+        Raises:
+            ValueError: If ``schedule`` is not a supported schedule name.
+
+        """
         return self._require_schedule(schedule).week[Weekday(weekday)]
 
     def get_week(self, schedule: str) -> dict[Weekday, list[ComfortPeriod]]:
-        """Return all weekdays from a named schedule."""
+        """Return all weekdays from a named schedule.
+
+        Raises:
+            ValueError: If ``schedule`` is not a supported schedule name.
+
+        """
         return self._require_schedule(schedule).week
 
     async def async_set_day(
         self, schedule: str, weekday: Weekday, periods: list[ComfortPeriod]
     ) -> None:
-        """Write one weekday of a named schedule."""
+        """Write one weekday of a named schedule.
+
+        Raises:
+            ValueError: If ``schedule`` is not a supported schedule name, or a
+                period is reversed or not half-hour aligned.
+
+        """
         await self._require_schedule(schedule).async_set_day(weekday, periods)

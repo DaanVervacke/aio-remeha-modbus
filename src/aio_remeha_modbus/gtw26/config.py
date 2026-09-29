@@ -120,7 +120,13 @@ class Config(Gtw26Component):
     _on_written: Callable[[Gtw26Component], None] | None = None
 
     async def write(self, field: str, value: object) -> None:
-        """Write a config field and notify the facade to reread it."""
+        """Write a config field and notify the facade to reread it.
+
+        Raises:
+            AttributeError: For an unknown or read-only field.
+            ValueError: If the field's write validator rejects the value.
+
+        """
         await super().write(field, value)
         if self._on_written is not None:
             self._on_written(self)

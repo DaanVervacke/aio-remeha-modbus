@@ -355,7 +355,12 @@ class GTW26(Device):
         }
 
     async def async_ensure_setup(self) -> None:
-        """Build the component set once, retrying after a failed setup."""
+        """Build the component set once, retrying after a failed setup.
+
+        Raises:
+            GTW26ProbeError: If the register layout cannot be identified.
+
+        """
         if self._setup_complete:
             return
         async with self._setup_lock:
@@ -409,7 +414,18 @@ class GTW26(Device):
                 del self._pending_once[name]
 
     async def async_update(self) -> UpdateReport:
-        """Refresh all regular and pending read-once bundles."""
+        """Refresh all regular and pending read-once bundles.
+
+        Returns:
+            An `UpdateReport` naming the refreshed bundles. A bundle that
+            answered with a register error is named in `failed` and keeps its
+            stale values; `complete` is True only when nothing failed.
+
+        Raises:
+            GTW26ProbeError: If setup cannot identify the register layout.
+            ModbusConnectionError: If the link is down.
+
+        """
         await self.async_ensure_setup()
         updated: set[str] = set()
         failed: dict[str, ModbusError] = {}
@@ -428,6 +444,15 @@ class GTW26(Device):
         Polls the sensors, hot-water, climate-zone, output and diagnostic (or
         base service) bundles. Settings, identity, config and schedule bundles
         are not read.
+
+        Returns:
+            An `UpdateReport` naming the refreshed bundles; `complete` is
+            True only when nothing failed.
+
+        Raises:
+            GTW26ProbeError: If setup cannot identify the register layout.
+            ModbusConnectionError: If the link is down.
+
         """
         await self.async_ensure_setup()
         updated: set[str] = set()
@@ -441,6 +466,15 @@ class GTW26(Device):
         Polls the settings and identity bundles, plus any pending read-once
         bundles (installer config and schedules on the iSystem layout). Live
         values are not read.
+
+        Returns:
+            An `UpdateReport` naming the refreshed bundles; `complete` is
+            True only when nothing failed.
+
+        Raises:
+            GTW26ProbeError: If setup cannot identify the register layout.
+            ModbusConnectionError: If the link is down.
+
         """
         await self.async_ensure_setup()
         updated: set[str] = set()
@@ -491,7 +525,13 @@ class GTW26(Device):
                 await self._nudge_panel()
 
     async def async_set_hot_water_mode(self, mode: HotWaterMode) -> None:
-        """Set hot-water mode while preserving heating-circuit bits."""
+        """Set hot-water mode while preserving heating-circuit bits.
+
+        Raises:
+            ValueError: If `mode` is not a `HotWaterMode`.
+            RemehaApiError: If the register layout is not set up.
+
+        """
         validated = HotWaterMode(mode)
         await self.async_ensure_setup()
         policy = self._policy()
@@ -508,7 +548,12 @@ class GTW26(Device):
                 await self._nudge_panel()
 
     async def async_set_clock(self, moment: datetime) -> None:
-        """Set the controller clock using the selected layout's clock policy."""
+        """Set the controller clock using the selected layout's clock policy.
+
+        Raises:
+            RemehaApiError: If the register layout is not set up.
+
+        """
         await self.async_ensure_setup()
         policy = self._policy().clock
         async with self._write_lock:
@@ -572,6 +617,10 @@ class GTW26(Device):
         The default ``struct_format`` matches the big-endian register words
         `decode_bytes` emits, so a single-register read decodes correctly on
         every host byte order.
+
+        Raises:
+            ValueError: If ``count`` is outside 1 to `GTW26_MAX_SPAN`.
+
         """
         if count < 1 or count > GTW26_MAX_SPAN:
             raise ValueError(f"Illegal count {count}: must be between 1 and {GTW26_MAX_SPAN}.")
@@ -579,7 +628,15 @@ class GTW26(Device):
         return struct.unpack(struct_format, decode_bytes(registers))
 
     async def async_read_all_raw(self) -> dict[str, dict[int, int | bool]]:
-        """Read all mapped bundles, including read-once bundles, without notifying."""
+        """Read all mapped bundles, including read-once bundles, without notifying.
+
+        Returns:
+            Raw register values keyed by register space, then by address.
+
+        Raises:
+            GTW26ProbeError: If setup cannot identify the register layout.
+
+        """
         await self.async_ensure_setup()
         assert self._bundles
         group = ComponentGroup(self._unit, list(self._bundles.values()))

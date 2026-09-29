@@ -233,6 +233,10 @@ async def async_detect(
     Only transient or unknown `ModbusError` instances propagate.
     ``message_spacing_seconds`` is the spacing the discovered device enforces
     on ``unit``, so a caller-configured spacing survives detection.
+
+    Returns:
+        `GTW26Detection` The discovery result with all probe evidence.
+
     """
     return await _async_probe(
         unit, base_only=False, message_spacing_seconds=message_spacing_seconds
@@ -246,6 +250,10 @@ async def async_detect_base(
 
     The iSystem blocks are skipped, so a caller that already knows the base
     layout answers pays for three reads instead of five.
+
+    Returns:
+        `GTW26Detection` The discovery result with all probe evidence.
+
     """
     return await _async_probe(unit, base_only=True, message_spacing_seconds=message_spacing_seconds)
 
