@@ -32,7 +32,7 @@ _ZONE_FROST = snap_clamp(0.5, 3.0, 20.0)
 
 
 class ClimateZone(Gtw26Component):
-    """Base-layout climate-zone component; the facade sets its designation."""
+    """Base-layout climate-zone component. The facade sets its designation."""
 
     register_ranges = BASE_WINDOWS
     designation: str
@@ -70,7 +70,7 @@ class ClimateZoneB(ClimateZone):
 
 
 class ISystemClimateZone(Gtw26Component):
-    """iSystem climate-zone base; the facade sets its A, B, or C designation."""
+    """iSystem climate-zone base. The facade sets its A, B, or C designation."""
 
     register_ranges = ISYSTEM_WINDOWS
     designation: str

@@ -148,7 +148,8 @@ class GTW26(Device):
 
         A successful detection returns a fully constructed, ready-to-use `GTW26`
         device. Constructing it applies the required message spacing through
-        `unit.set_message_spacing`; see `GTW26Detection` for how this differs
+        `unit.set_message_spacing`.
+        See `GTW26Detection` for how this differs
         from GTW08's detection.
 
         Args:

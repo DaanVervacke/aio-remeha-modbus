@@ -88,15 +88,15 @@ the schedules for each `Weekday` are available through `ClimateZone.current_sche
 instances of `gtw08.time_program.TimeProgram`.
 
 ### GTW-26 detection
-To detect a GTW-26 controller behind a `ModbusUnit`, call `await GTW26.async_detect()`. Like its GTW-08
-counterpart, the returned `GTW26Detection` carries `success` and a `failure_reason` instead of raising for
-wrong-device answers; only transient `ModbusError`s propagate. The register layout (`base` or `isystem`)
-and the controller generation are detected automatically; pass a `RegisterLayout` to the `GTW26`
-constructor to override the detected layout.
+To detect a GTW-26 controller behind a `ModbusUnit`, call `await GTW26.async_detect()`.
+Like its GTW-08 counterpart, the returned `GTW26Detection` carries `success` and a `failure_reason`
+instead of raising for wrong-device answers. Only transient `ModbusError`s propagate.
+The register layout (`base` or `isystem`) and the controller generation are detected automatically.
+Pass a `RegisterLayout` to the `GTW26` constructor to override the detected layout.
 
 GTW-26 controllers need at least 50 ms between Modbus messages. The `GTW26` constructor applies
-this spacing automatically through its `message_spacing_seconds` parameter; pass a different value
-to override it.
+this spacing automatically through its `message_spacing_seconds` parameter.
+Pass a different value to override it.
 
 ### GTW-26 device
 To create a new API instance, provide the `ModbusUnit` instance to the `GTW26` constructor.
@@ -104,17 +104,18 @@ Components like `GTW26.sensors`, `GTW26.hot_water` and `GTW26.climate_zones` are
 `await GTW26.async_update()`.
 
 ### GTW-26 climate zones
-Zones are exposed as `ClimateZone` instances keyed `A` and `B` through `GTW26.climate_zones`;
-zone `C` only exists on `isystem` layouts. The `zone_a_present`, `zone_b_present`, `zone_c_present`
-and `hot_water_present` properties report whether the component reported a sensor reading (a
-non-`None` decoded value); all of them return `False` until the first `await GTW26.async_update()`
-call. The `force_zone_a`, `force_zone_b` and `force_zone_c` constructor flags report a zone as
-present even without a sensor reading; passing `force_zone_c=True` together with an explicit
-`layout="base"` raises `ValueError`.
+Zones are exposed as `ClimateZone` instances keyed `A` and `B` through `GTW26.climate_zones`.
+Zone `C` only exists on `isystem` layouts. The `zone_a_present`, `zone_b_present`, `zone_c_present`
+and `hot_water_present` properties report whether the component reported a sensor reading
+(a non-`None` decoded value).
+All of them return `False` until the first `await GTW26.async_update()` call.
+The `force_zone_a`, `force_zone_b` and `force_zone_c` constructor flags report a zone as
+present even without a sensor reading.
+Passing `force_zone_c=True` together with an explicit `layout="base"` raises `ValueError`.
 
 ### GTW-26 schedules
 Weekly comfort schedules are available through `GTW26.schedule` as a `ScheduleFacade` on `isystem`
-layouts; it is `None` on `base` layouts. `GTW26.schedule.get_week("hot_water")` returns the
+layouts. On `base` layouts it is `None`. `GTW26.schedule.get_week("hot_water")` returns the
 `ComfortPeriod` slots for each day, keyed by the zero-based, Monday-first `Weekday` enum. A period
 ending at `time(0, 0)` runs to the end of the day. The facade supports the `hot_water`,
 `circuit_a_p4`, `circuit_b_p4`, `circuit_c_p4` and `auxiliary` programs.

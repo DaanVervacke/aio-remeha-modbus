@@ -161,8 +161,8 @@ def _block_values(blocks: tuple[ProbeBlock, ...], address: int) -> tuple[int, ..
 async def async_detect(unit: ModbusUnit) -> GTW26Detection:
     """Detect the GTW26 layout and retain all identity probe evidence.
 
-    A wrong-device answer is reported through a failed detection result;
-    only transient or unknown `ModbusError` instances propagate.
+    A wrong-device answer is reported through a failed detection result.
+    Only transient or unknown `ModbusError` instances propagate.
     """
     base_probe = await _async_read_blocks(unit, BASE_IDENTITY_BLOCKS)
     isystem_probe = await _async_read_blocks(unit, ISYSTEM_IDENTITY_BLOCKS)
