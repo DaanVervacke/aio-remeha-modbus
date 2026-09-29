@@ -216,3 +216,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D"]
 "tests/gtw26/*" = ["D", "PLR0917", "PT006", "SLF001"]
+"scripts/check.py" = [
+    "T201", # gate runner prints the command it is about to run
+]

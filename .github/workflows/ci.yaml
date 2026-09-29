@@ -48,23 +48,8 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
-      - name: prek
-        uses: j178/prek-action@v3.0.0
-        with:
-          extra-args: "--all-files"
-
-      - name: pytest
-        id: run_pytest
-        run: |
-          uv run pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio_remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
-      - name: Check for test failures
-        if: ${{ failure() }}
-        run: |
-          echo ${{ steps.run_pytest.outcome }}
-          exit 1
-
-      - name: Build docs
-        run: uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html
+      - name: Run check gate
+        run: uv run python -m scripts.check
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v7
