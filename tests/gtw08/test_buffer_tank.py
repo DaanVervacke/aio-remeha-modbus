@@ -16,7 +16,22 @@ async def test_read_buffer_tank(remeha_modbus_unit: MockModbusUnit):
 
     assert buffer_tank.temperature_bottom == 24.5
 
-    # The fixture holds the INT16 null value, as if no top sensor is fitted.
+    # The fixture holds 0xFFFF, which is how appliances report a missing top sensor.
+    assert buffer_tank.temperature_top is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("nan", [0xFFFF, 0x8000])
+async def test_buffer_tank_nan_values(remeha_modbus_unit: MockModbusUnit, nan: int):
+    """Test that both 0xFFFF and the INT16 null value 0x8000 decode to None."""
+
+    await remeha_modbus_unit.write_register(7600, nan)
+    await remeha_modbus_unit.write_register(7601, nan)
+
+    buffer_tank = BufferTank(remeha_modbus_unit)
+    await buffer_tank.async_update()
+
+    assert buffer_tank.temperature_bottom is None
     assert buffer_tank.temperature_top is None
 
 

@@ -1,5 +1,6 @@
 """Helpers for modbus field types."""
 
+from collections.abc import Iterable
 from datetime import time
 from enum import IntEnum, IntFlag
 from typing import overload, override
@@ -274,6 +275,7 @@ def int16(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
+    nan: int | Iterable[int] = 0x8000,
     force_fc16: bool = False,
 ) -> NumberField[float]: ...
 
@@ -285,6 +287,7 @@ def int16(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
+    nan: int | Iterable[int] = 0x8000,
     force_fc16: bool = False,
 ) -> NumberField[int]: ...
 
@@ -296,17 +299,20 @@ def int16(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
+    nan: int | Iterable[int] = 0x8000,
     force_fc16: bool = False,
 ) -> NumberField[int | float]:
     """Create a field containing a signed 16-bits integer.
 
     If `scale` is provided, a `gauge` is returned, otherwise an `integer`.
+    `nan` defaults to the INT16 null value `0x8000`; pass one or more raw values
+    to override it.
     """
 
     if scale is None:
         return integer(
             address,
-            nan=0x8000,
+            nan=nan,
             stride=stride,
             writable=writable,
             unit=unit,
@@ -316,7 +322,7 @@ def int16(
     return gauge(
         address,
         scale,
-        nan=0x8000,
+        nan=nan,
         stride=stride,
         writable=writable,
         unit=unit,
