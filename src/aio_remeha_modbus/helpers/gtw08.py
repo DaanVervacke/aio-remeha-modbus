@@ -74,11 +74,14 @@ class TimeOfDay:
         """Decode a CiA 301 TIME_OF_DAY to a `datetime` object.
 
         `TIME_OF_DAY` is a struct that is defined as follows:
-        | Field     | Type            | Size (bits) |
-        |-----------|----------------:|------------:|
-        | `ms`      | `unsigned int`  |     28      |
-        |`<padding>`| `N/A`           |      4      |
-        | `days`    | `unsigned int`  |     16      |
+
+        ===============  ==============  ===========
+        Field            Type            Size (bits)
+        ===============  ==============  ===========
+        ``ms``           unsigned int    28
+        ``<padding>``    N/A             4
+        ``days``         unsigned int    16
+        ===============  ==============  ===========
 
         * `TIME_OF_DAY.ms` is the amount of milliseconds since midnight
         * `TIME_OF_DAY.days` is the amount of days since 1984-01-01.

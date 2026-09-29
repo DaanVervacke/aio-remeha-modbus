@@ -239,37 +239,43 @@ class TimeProgram(RemehaComponent):
     for a given zone. For cooling, one schedule can be used. All schedules are divided in 7 day schedules,
     one for each weekday.
 
-    ### Time program encoding
+    Time program encoding
+    ---------------------
     A time program is encoded in a binary string, and is 20 bytes (10 registers) in size.
     It is encoded as follows:
 
-    | Byte index  |          Contents           | Data type |
-    |:-----------:|:----------------------------|:----------|
-    |    `0`      | Number of switches (max 6)  | `UINT8`   |
-    |    `1`      | Temperature 1               | `UINT16`  |
-    |    `3`      | Switch time 1               | `UINT8`   |
-    |    `4`      | Temperature 2               | `UINT16`  |
-    |    `6`      | Switch time 2               | `UINT8`   |
-    |    ...      |            ...              |   ...     |
-    |   `16`      | Temperature 6               | `UINT16`  |
-    |   `18`      | Switch time 6               | `UINT8`   |
+    ==========  ===========================  =========
+    Byte index  Contents                     Data type
+    ==========  ===========================  =========
+    ``0``       Number of switches (max 6)   ``UINT8``
+    ``1``       Temperature 1                ``UINT16``
+    ``3``       Switch time 1                ``UINT8``
+    ``4``       Temperature 2                ``UINT16``
+    ``6``       Switch time 2                ``UINT8``
+    ...         ...                          ...
+    ``16``      Temperature 6                ``UINT16``
+    ``18``      Switch time 6                ``UINT8``
+    ==========  ===========================  =========
 
-    #### Temperature encoding
+    Temperature encoding
+    --------------------
     The switch temperature is encoded into activities (heat/cool, dhw, dhw primary).
     The setpoints of these activities are defined elsewhere. The activities are defined as follows:
 
-    | Name      | MSB     | LSB                     |
-    |:----------|:-------:|------------------------:|
-    | At home   | `0x10`  |    `0xc8` (heat/cool)   |
-    | Morning   | `0x30`  |    `0xc8` (heat/cool)   |
-    | Away      | `0x20`  |    `0xc8` (heat/cool)   |
-    | Evening   | `0x40`  |    `0xc8` (heat/cool)   |
-    | Sleeping  | `0x00`  |    `0xc8` (heat/cool)   |
-    | Eco       | `0x00`  |    `0x00` (DHW primary) |
-    | Comfort   | `0x10`  |    `0x00` (DHW primary) |
+    ==========  ========  ==========================
+    Name        MSB       LSB
+    ==========  ========  ==========================
+    At home     ``0x10``  ``0xc8`` (heat/cool)
+    Morning     ``0x30``  ``0xc8`` (heat/cool)
+    Away        ``0x20``  ``0xc8`` (heat/cool)
+    Evening     ``0x40``  ``0xc8`` (heat/cool)
+    Sleeping    ``0x00``  ``0xc8`` (heat/cool)
+    Eco         ``0x00``  ``0x00`` (DHW primary)
+    Comfort     ``0x10``  ``0x00`` (DHW primary)
+    ==========  ========  ==========================
 
-
-    #### Switch time encoding
+    Switch time encoding
+    --------------------
     The switch time is encoded as a number, indicating the amount of 10-minute
     steps from 00:00 local time. This means that a value of 10 stands for 01:40AM.
     """

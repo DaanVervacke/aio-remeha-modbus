@@ -270,3 +270,4 @@ custom_components/hacs
 config/www/scheduler-card/**
 # pycharm
 .idea
+docs/source/api/
