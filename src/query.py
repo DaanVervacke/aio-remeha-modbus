@@ -438,5 +438,10 @@ async def main() -> int:  # noqa: D103
     return exit_code
 
 
-if __name__ == "__main__":
+def run() -> None:
+    """Run the CLI and exit with its status code."""
     raise SystemExit(asyncio.run(main()))
+
+
+if __name__ == "__main__":
+    run()
