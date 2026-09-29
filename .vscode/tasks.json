@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Sphinx: build docs",
+      "type": "shell",
+      "command": "uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
