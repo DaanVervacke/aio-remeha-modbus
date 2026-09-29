@@ -35,7 +35,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -43,7 +43,7 @@ jobs:
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
 
       - name: Install uv and dependencies
-        uses: astral-sh/setup-uv@d31148d669074a8d0a63714ba94f3201e7020bc3
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
