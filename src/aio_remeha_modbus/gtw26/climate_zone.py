@@ -2,7 +2,6 @@
 
 from modbus_connection.model import NumberField, bit, integer
 
-import aio_remeha_modbus.gtw08  # noqa: F401
 from aio_remeha_modbus.gtw26.const import (
     BASE_WINDOWS,
     HEATING_MODE_MASK,
