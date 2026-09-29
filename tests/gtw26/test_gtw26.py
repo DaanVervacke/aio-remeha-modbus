@@ -11,7 +11,7 @@ from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
-from aio_remeha_modbus.gtw26 import GTW26, HeatingMode, HotWaterMode
+from aio_remeha_modbus.gtw26 import GTW26, DetectionFailureReason, HeatingMode, HotWaterMode
 from aio_remeha_modbus.gtw26.const import (
     SCHEDULE_BASES,
     ControllerGeneration,
@@ -178,6 +178,98 @@ class TestAutoSetup:
             await device._async_setup()
 
     @pytest.mark.asyncio
+    async def test_configured_message_spacing_survives_auto_detection(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that a caller-configured spacing is not reset by detection."""
+        _seed_isystem(mock_modbus_unit)
+
+        device = GTW26("test", mock_modbus_unit, message_spacing_seconds=0.5)
+        await device.async_update()
+
+        assert mock_modbus_unit.message_spacing == 0.5
+
+    @pytest.mark.asyncio
+    async def test_detect_applies_requested_message_spacing(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that detection constructs its device with the given spacing."""
+        _seed_isystem(mock_modbus_unit)
+
+        detection = await GTW26.async_detect(
+            mock_modbus_unit, message_spacing_seconds=0.5
+        )
+
+        assert mock_modbus_unit.message_spacing == 0.5
+        assert detection.device is not None
+        assert detection.device._message_spacing_seconds == 0.5
+
+    @pytest.mark.asyncio
+    async def test_setup_does_not_probe_when_layout_and_generation_known(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that a fully configured device sets up without identity probes."""
+        device = GTW26(
+            "test",
+            mock_modbus_unit,
+            layout=RegisterLayout.BASE,
+            generation=ControllerGeneration.GENERATION_4,
+        )
+
+        await device.async_ensure_setup()
+
+        assert mock_modbus_unit.read_events == []
+
+    @pytest.mark.asyncio
+    async def test_isystem_setup_treats_missing_generation_as_terminal(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that an iSystem device without a generation never probes identity."""
+        _seed_isystem(mock_modbus_unit)
+
+        device = GTW26("test", mock_modbus_unit, layout=RegisterLayout.ISYSTEM)
+        await device.async_ensure_setup()
+
+        assert device.generation is None
+        assert mock_modbus_unit.read_events == []
+
+    @pytest.mark.asyncio
+    async def test_base_setup_without_generation_probes_only_base_identity(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that a base device without a generation skips the iSystem probe."""
+        _seed(mock_modbus_unit)
+
+        device = GTW26("test", mock_modbus_unit, layout=RegisterLayout.BASE)
+        await device.async_ensure_setup()
+
+        blocks = [(event.address, event.count) for event in mock_modbus_unit.read_events]
+        assert blocks == [(3, 4), (108, 3), (457, 1)]
+        assert device.generation is ControllerGeneration.GENERATION_4
+
+    @pytest.mark.parametrize(
+        ("type_code", "failure_reason"),
+        [
+            pytest.param(21, DetectionFailureReason.UNKNOWN_MODEL, id="known_model_code"),
+            pytest.param(999, DetectionFailureReason.NOT_A_GTW26, id="unknown_model_code"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_base_setup_without_generation_raises_on_unmapped_type_code(
+        self, mock_modbus_unit: MockModbusUnit, type_code: int, failure_reason: DetectionFailureReason
+    ) -> None:
+        """Test that a base device whose type code names no generation fails setup."""
+        _seed(mock_modbus_unit)
+        mock_modbus_unit.holding[457] = type_code
+
+        device = GTW26("test", mock_modbus_unit, layout=RegisterLayout.BASE)
+
+        with pytest.raises(GTW26ProbeError) as caught:
+            await device.async_ensure_setup()
+
+        assert caught.value.detection.failure_reason is failure_reason
+
+    @pytest.mark.asyncio
     async def test_async_setup_only_detects_once(
         self, mock_modbus_unit: MockModbusUnit
     ) -> None:
@@ -263,13 +355,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         await device.async_update()
 
@@ -285,8 +371,7 @@ class TestProperties:
             generation=ControllerGeneration.GENERATION_4,
             force_zone_a=True,
         )
-        device._build_base_components()
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # No sensor data
         assert device.zone_a_present is True
@@ -302,13 +387,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # Remove temperature data (room_temperature at 18, calculated_temperature at 21)
         mock_modbus_unit.holding[18] = 0xFFFF
@@ -330,13 +409,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # Add zone B sensor data - room_temperature is at register 27
         mock_modbus_unit.holding[27] = 210
@@ -354,8 +427,7 @@ class TestProperties:
             generation=ControllerGeneration.GENERATION_4,
             force_zone_b=True,
         )
-        device._build_base_components()
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         assert device.zone_b_present is True
 
@@ -370,13 +442,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # Remove all temperature data for zone B
         # room_temperature at 27, calculated_temperature at 32, supply_temperature at 33
@@ -401,13 +467,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         assert device.zone_c_present is False
 
@@ -424,17 +484,7 @@ class TestProperties:
             layout=RegisterLayout.ISYSTEM,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_isystem_components()
-        from modbus_connection.model import ComponentGroup
-
-        read_once = {"config", *(f"schedules.{name}" for name in SCHEDULE_BASES)}
-        device._pool = ComponentGroup(
-            mock_modbus_unit,
-            [component for name, component in device._bundles.items() if name not in read_once],
-        )
-        device._read_once = frozenset(read_once)
-        device._pending_once = {name: device._bundles[name] for name in read_once}
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
 
         # Add zone C sensor data
         await device.async_update()
@@ -455,8 +505,7 @@ class TestProperties:
             generation=ControllerGeneration.GENERATION_4,
             force_zone_c=True,
         )
-        device._build_isystem_components()
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
 
         assert device.zone_c_present is True
 
@@ -473,10 +522,10 @@ class TestProperties:
             layout=RegisterLayout.ISYSTEM,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_isystem_components()
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
 
         # Remove zone C sensor data
+        mock_modbus_unit.holding[618] = 0xFFFF
         mock_modbus_unit.holding[619] = 0xFFFF
         await device.async_update()
 
@@ -497,13 +546,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         await device.async_update()
 
@@ -524,13 +567,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # Remove primary sensor but keep DPSM
         mock_modbus_unit.holding[62] = 0xFFFF
@@ -554,13 +591,7 @@ class TestProperties:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         # Remove all sensors
         mock_modbus_unit.holding[62] = 0xFFFF
@@ -582,17 +613,7 @@ class TestProperties:
             layout=RegisterLayout.ISYSTEM,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_isystem_components()
-        from modbus_connection.model import ComponentGroup
-
-        read_once = {"config", *(f"schedules.{name}" for name in SCHEDULE_BASES)}
-        device._pool = ComponentGroup(
-            mock_modbus_unit,
-            [component for name, component in device._bundles.items() if name not in read_once],
-        )
-        device._read_once = frozenset(read_once)
-        device._pending_once = {name: device._bundles[name] for name in read_once}
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
 
         # Add hot water sensor - temperature is at register 614
         mock_modbus_unit.holding[614] = 550
@@ -622,6 +643,25 @@ class TestReadRegisters:
         result = await device.async_read_registers(457, count=1, struct_format=">H")
 
         # 457 contains 24
+        assert result == (24,)
+
+    @pytest.mark.asyncio
+    async def test_read_registers_default_format_is_big_endian(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that the default struct format decodes big-endian register words."""
+        _seed(mock_modbus_unit)
+        device = GTW26(
+            "test",
+            mock_modbus_unit,
+            layout=RegisterLayout.BASE,
+            generation=ControllerGeneration.GENERATION_4,
+        )
+        device._setup_complete = True
+
+        result = await device.async_read_registers(457, count=1)
+
+        # 457 contains 24; a native-order default would mis-decode on little-endian hosts
         assert result == (24,)
 
     @pytest.mark.asyncio
@@ -734,13 +774,7 @@ class TestNudgePanel:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_heating_mode("A", HeatingMode.AUTO)
@@ -762,13 +796,7 @@ class TestNudgePanel:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_3,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_heating_mode("A", HeatingMode.AUTO)
@@ -790,13 +818,7 @@ class TestNudgePanel:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_hot_water_mode(HotWaterMode.TEMP)
@@ -822,13 +844,7 @@ class TestErrorPaths:
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
-        from modbus_connection.model import ComponentGroup
-
-        device._pool = ComponentGroup(
-            mock_modbus_unit, list(device._bundles.values())
-        )
-        device._setup_complete = True
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
 
         mock_modbus_unit.fail_requests(ModbusConnectionError("link down"))
 
@@ -871,16 +887,15 @@ class TestErrorPaths:
     async def test_async_setup_with_no_pool_does_not_fail(
         self, mock_modbus_unit: MockModbusUnit
     ) -> None:
-        """Test that _poll_bundles handles None pool gracefully."""
+        """Test that _poll_group handles None pool gracefully."""
         device = GTW26(
             "test",
             mock_modbus_unit,
             layout=RegisterLayout.BASE,
             generation=ControllerGeneration.GENERATION_4,
         )
-        device._build_base_components()
+        device._setup_bundles(RegisterLayout.BASE, device.generation)
         device._pool = None
-        device._setup_complete = True
 
         # Should not raise even with None pool
         report = await device.async_update()

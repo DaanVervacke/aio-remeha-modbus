@@ -148,11 +148,7 @@ class Config(Gtw26Component):
     footprint_c_night = float10(359, none_values=(150,))
     zone_a_min = float10(298, writable=_ZONE_A_MIN, force_fc16=True, unit="°C")
     zone_a_max = float10(299, writable=_ZONE_A_MAX, force_fc16=True, unit="°C")
-    max_fan_speed = integer(305, signed=False, nan=0xFFFF, unit="rpm")
     three_way_valve_temperature_shift = float10(426, unit="°C")
-    calculated_setpoint = float10(436, unit="°C")
-    three_way_valve_bandwidth = float10(438)
-    modulated_power = integer(473, signed=False, unit="%")
 
 
 class ISystemOutputs(Gtw26Component):

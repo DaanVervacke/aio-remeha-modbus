@@ -2,8 +2,9 @@
 
 import asyncio
 import struct
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 
 from modbus_connection import (
     ModbusConnectionError,
@@ -55,12 +56,37 @@ from aio_remeha_modbus.gtw26.system_discovery_table import (
     Identity,
     ISystemIdentity,
     async_detect,
+    async_detect_base,
     async_probe,
 )
 from aio_remeha_modbus.helpers.fields import decode_bytes
 
 _BASE_READ_ONCE = frozenset()
 _ISYSTEM_READ_ONCE = frozenset(f"schedules.{name}" for name in SCHEDULE_BASES) | {"config"}
+
+# Bundle-name split per layout, mirroring the GTW08 READINGS/SETTINGS contract:
+# readings are the live values, settings the rarely-changing configuration.
+# Read-once bundles (config, schedules) belong to the settings semantics and
+# are polled through `_pending_once`, not through the settings pool.
+_BASE_READINGS: Final = (
+    "sensors",
+    "hot_water",
+    "climate_zone_a",
+    "climate_zone_b",
+    "outputs",
+    "service",
+)
+_BASE_SETTINGS: Final = ("settings", "identity")
+_ISYSTEM_READINGS: Final = (
+    "sensors",
+    "hot_water",
+    "climate_zone_a",
+    "climate_zone_b",
+    "climate_zone_c",
+    "outputs",
+    "diagnostics",
+)
+_ISYSTEM_SETTINGS: Final = ("settings", "identity")
 
 __all__ = ["GTW26", "async_detect", "async_probe"]
 
@@ -85,7 +111,9 @@ class GTW26(Device):
         service: Service component. None until setup complete.
         identity: Identity component. None until setup complete.
         schedule: Schedule component (iSystem only). None until setup complete.
-        _pool: ComponentGroup for pooled reads of regular bundles.
+        _pool: ComponentGroup for pooled reads of all regular bundles.
+        _readings_pool: ComponentGroup for the live-value bundles.
+        _settings_pool: ComponentGroup for the configuration bundles.
         _bundles: Dict of all component bundles by name.
         _read_once: Frozenset of bundle names to read only once.
         _pending_once: Dict of pending one-time read bundles.
@@ -144,6 +172,7 @@ class GTW26(Device):
         self._unit = unit
         self._layout = layout
         self._generation = generation
+        self._message_spacing_seconds = message_spacing_seconds
         self._force_zone_a = force_zone_a
         self._force_zone_b = force_zone_b
         self._force_zone_c = force_zone_c
@@ -160,6 +189,10 @@ class GTW26(Device):
         self.schedule: ScheduleFacade | None = None
 
         self._pool: ComponentGroup | None = None
+        self._readings_pool: ComponentGroup | None = None
+        self._settings_pool: ComponentGroup | None = None
+        self._readings_names: frozenset[str] = frozenset()
+        self._settings_names: frozenset[str] = frozenset()
         self._bundles: dict[str, Component] = {}
         self._read_once: frozenset[str] = frozenset()
         self._pending_once: dict[str, Component] = {}
@@ -168,17 +201,22 @@ class GTW26(Device):
         self._setup_lock = asyncio.Lock()
 
     @staticmethod
-    async def async_detect(unit: ModbusUnit) -> GTW26Detection:
+    async def async_detect(
+        unit: ModbusUnit, *, message_spacing_seconds: float = MESSAGE_SPACING
+    ) -> GTW26Detection:
         """Detect the type of GTW26 controller.
 
         A successful detection returns a fully constructed, ready-to-use `GTW26`
-        device. Constructing it applies the required message spacing through
-        `unit.set_message_spacing`.
+        device. Constructing it applies the message spacing the detection was
+        given through `unit.set_message_spacing`, so a caller-configured spacing
+        survives detection when passed here.
         See `GTW26Detection` for how this differs
         from GTW08's detection.
 
         Args:
             unit (ModbusUnit): The modbus unit to connect to the device.
+            message_spacing_seconds (float): The message spacing the discovered
+                device enforces on ``unit``.
 
         Returns:
             `GTW26Detection` The discovery result.
@@ -187,7 +225,7 @@ class GTW26(Device):
             `ModbusError` if a transient or unknown modbus error is raised during discovery.
 
         """
-        return await async_detect(unit)
+        return await async_detect(unit, message_spacing_seconds=message_spacing_seconds)
 
     @property
     def name(self) -> str:
@@ -205,34 +243,54 @@ class GTW26(Device):
         return self._generation
 
     async def _async_setup(self) -> None:
-        """Detect the layout when needed and construct its register bundles."""
+        """Detect what is missing and construct the layout's register bundles.
+
+        A known layout is never re-probed. The controller generation is resolved
+        from the base identity blocks when the base layout needs it; a missing
+        generation is a valid terminal state on the iSystem layout, whose write
+        policy never nudges the panel.
+        """
         layout = self._layout
         generation = self._generation
-        if layout is None or generation is None:
-            detection = await async_detect(self._unit)
+        if layout is None:
+            detection = await async_detect(
+                self._unit, message_spacing_seconds=self._message_spacing_seconds
+            )
             if not detection.success:
                 raise GTW26ProbeError(detection)
-            if layout is None:
-                layout = (
-                    RegisterLayout.ISYSTEM if detection.isystem_detected else RegisterLayout.BASE
-                )
-            if generation is None:
-                generation = detection.generation
+            layout = RegisterLayout.ISYSTEM if detection.isystem_detected else RegisterLayout.BASE
+            generation = detection.generation
+        elif layout is RegisterLayout.BASE and generation is None:
+            detection = await async_detect_base(
+                self._unit, message_spacing_seconds=self._message_spacing_seconds
+            )
+            if not detection.success:
+                raise GTW26ProbeError(detection)
+            generation = detection.generation
+        self._setup_bundles(layout, generation)
 
+    def _setup_bundles(
+        self, layout: RegisterLayout, generation: ControllerGeneration | None
+    ) -> None:
+        """Construct the layout's components, poll pools and read-once state."""
         self._layout = RegisterLayout(layout)
         self._generation = None if generation is None else ControllerGeneration(generation)
 
         if self._layout is RegisterLayout.BASE:
             self._build_base_components()
             read_once = _BASE_READ_ONCE
+            readings, settings = _BASE_READINGS, _BASE_SETTINGS
         else:
             self._build_isystem_components()
             read_once = _ISYSTEM_READ_ONCE
+            readings, settings = _ISYSTEM_READINGS, _ISYSTEM_SETTINGS
 
-        self._pool = ComponentGroup(
-            self._unit,
-            [component for name, component in self._bundles.items() if name not in read_once],
-        )
+        regular = [name for name in self._bundles if name not in read_once]
+        self._pool = ComponentGroup(self._unit, [self._bundles[name] for name in regular])
+        self._readings_names = frozenset(readings)
+        self._readings_pool = ComponentGroup(self._unit, [self._bundles[name] for name in readings])
+        self._settings_names = frozenset(settings)
+        self._settings_pool = ComponentGroup(self._unit, [self._bundles[name] for name in settings])
         self._pending_once = {name: self._bundles[name] for name in read_once}
         self._read_once = read_once
         if self.config is not None:
@@ -309,19 +367,24 @@ class GTW26(Device):
             if not self._setup_complete:
                 await self._async_setup()
 
-    async def _poll_bundles(self, updated: set[str], failed: dict[str, ModbusError]) -> None:
-        """Poll regular bundles as a pool, falling back to individual reads."""
-        if self._pool is None:
+    async def _poll_group(
+        self,
+        group: ComponentGroup | None,
+        names: Iterable[str],
+        updated: set[str],
+        failed: dict[str, ModbusError],
+    ) -> None:
+        """Poll one bundle pool, falling back to individual reads."""
+        if group is None:
             return
-        regular = [name for name in self._bundles if name not in self._read_once]
         try:
-            await self._pool.async_update()
+            await group.async_update()
         except ModbusConnectionError:
             raise
         except ModbusError:
-            await self._poll_individually(regular, updated, failed)
+            await self._poll_individually(list(names), updated, failed)
         else:
-            updated.update(regular)
+            updated.update(names)
 
     async def _poll_individually(
         self, names: list[str], updated: set[str], failed: dict[str, ModbusError]
@@ -355,17 +418,41 @@ class GTW26(Device):
         await self.async_ensure_setup()
         updated: set[str] = set()
         failed: dict[str, ModbusError] = {}
-        await self._poll_bundles(updated, failed)
+        await self._poll_group(
+            self._pool,
+            [name for name in self._bundles if name not in self._read_once],
+            updated,
+            failed,
+        )
         await self._poll_read_once(updated, failed)
         return UpdateReport(updated=updated, failed=failed)
 
     async def async_update_readings(self) -> UpdateReport:
-        """Refresh GTW26 readings using the unified polling engine."""
-        return await self.async_update()
+        """Refresh only the live-value bundles.
+
+        Polls the sensors, hot-water, climate-zone, output and diagnostic (or
+        base service) bundles. Settings, identity, config and schedule bundles
+        are not read.
+        """
+        await self.async_ensure_setup()
+        updated: set[str] = set()
+        failed: dict[str, ModbusError] = {}
+        await self._poll_group(self._readings_pool, self._readings_names, updated, failed)
+        return UpdateReport(updated=updated, failed=failed)
 
     async def async_update_settings(self) -> UpdateReport:
-        """Refresh GTW26 settings using the unified polling engine."""
-        return await self.async_update()
+        """Refresh only the configuration bundles.
+
+        Polls the settings and identity bundles, plus any pending read-once
+        bundles (installer config and schedules on the iSystem layout). Live
+        values are not read.
+        """
+        await self.async_ensure_setup()
+        updated: set[str] = set()
+        failed: dict[str, ModbusError] = {}
+        await self._poll_group(self._settings_pool, self._settings_names, updated, failed)
+        await self._poll_read_once(updated, failed)
+        return UpdateReport(updated=updated, failed=failed)
 
     def _invalidate_read_once(self, component: Component) -> None:
         """Re-arm a cached bundle after a successful write."""
@@ -483,9 +570,14 @@ class GTW26(Device):
         await self._unit.write_registers(PANEL_NUDGE_REGISTER, [0])
 
     async def async_read_registers(
-        self, address: int, *, count: int = 1, struct_format: str = "=H"
+        self, address: int, *, count: int = 1, struct_format: str = ">H"
     ) -> tuple[Any, ...]:
-        """Read and unpack raw holding registers for diagnostics."""
+        """Read and unpack raw holding registers for diagnostics.
+
+        The default ``struct_format`` matches the big-endian register words
+        `decode_bytes` emits, so a single-register read decodes correctly on
+        every host byte order.
+        """
         if count < 1 or count > GTW26_MAX_SPAN:
             raise ValueError(f"Illegal count {count}: must be between 1 and {GTW26_MAX_SPAN}.")
         registers = await self._unit.read_holding_registers(address, count)

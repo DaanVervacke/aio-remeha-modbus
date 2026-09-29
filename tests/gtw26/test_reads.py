@@ -1,10 +1,11 @@
 import pytest
+import pytest
 from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.gtw26 import GTW26, HeatingMode, HotWaterMode, HotWaterPriority
 from aio_remeha_modbus.gtw26.const import (
     BASE_WINDOWS,
-    SCHEDULE_BASES,
+    GTW26_MAX_SPAN,
     ControllerGeneration,
     RegisterLayout,
 )
@@ -60,12 +61,7 @@ def base_gtw26(
         force_zone_a=force_circuit_a,
         force_zone_b=force_circuit_b,
     )
-    device._build_base_components()
-    from modbus_connection.model import ComponentGroup
-
-    device._pool = ComponentGroup(unit, list(device._bundles.values()))
-    device._poll_group = device._pool
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.BASE, variant)
     return device
 
 
@@ -86,20 +82,7 @@ def isystem_gtw26(
         force_zone_b=force_circuit_b,
         force_zone_c=force_circuit_c,
     )
-    device._build_isystem_components()
-    from modbus_connection.model import ComponentGroup
-
-    read_once = {"config", *(f"schedules.{name}" for name in SCHEDULE_BASES)}
-    device._pool = ComponentGroup(
-        unit, [component for name, component in device._bundles.items() if name not in read_once]
-    )
-    device._read_once = frozenset(read_once)
-    device._pending_once = {name: device._bundles[name] for name in read_once}
-    device._poll_group = device._pool
-    device.config._on_written = device._invalidate_read_once
-    for program in device.schedule.bundles().values():
-        program._on_day_written = device._invalidate_read_once
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.ISYSTEM, variant)
     return device
 
 
@@ -170,6 +153,79 @@ async def test_base_pooled_reads_stay_inside_windows(mock_modbus_unit):
             for start, count in blocks
             for end in (start + count - 1,)
         )
+
+
+@pytest.mark.asyncio
+async def test_base_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
+    _seed(mock_modbus_unit)
+    diematic = base_gtw26(mock_modbus_unit)
+
+    await diematic.async_update()
+
+    blocks = [
+        (event.address, event.count)
+        for event in mock_modbus_unit.read_events
+        if event.register_type == "holding"
+    ]
+    assert blocks
+    assert all(count <= GTW26_MAX_SPAN for _, count in blocks)
+
+
+_BASE_READINGS_BUNDLES = {
+    "sensors",
+    "hot_water",
+    "climate_zone_a",
+    "climate_zone_b",
+    "outputs",
+    "service",
+}
+_BASE_SETTINGS_BUNDLES = {"settings", "identity"}
+
+
+@pytest.mark.parametrize(
+    ("update", "expected_updated", "reads_live", "reads_config"),
+    [
+        pytest.param(
+            GTW26.async_update_readings,
+            _BASE_READINGS_BUNDLES,
+            True,
+            False,
+            id="readings",
+        ),
+        pytest.param(
+            GTW26.async_update_settings,
+            _BASE_SETTINGS_BUNDLES,
+            False,
+            True,
+            id="settings",
+        ),
+        pytest.param(
+            GTW26.async_update,
+            _BASE_READINGS_BUNDLES | _BASE_SETTINGS_BUNDLES,
+            True,
+            True,
+            id="all",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_base_update_scope_polls_only_its_own_bundles(
+    mock_modbus_unit, update, expected_updated, reads_live, reads_config
+):
+    # Pooled blocks bridge gaps inside a declared window, so a poll physically
+    # touches foreign addresses; the split is asserted on the decoded values.
+    _seed(mock_modbus_unit)
+    diematic = base_gtw26(mock_modbus_unit)
+    mock_modbus_unit.read_events.clear()
+
+    report = await update(diematic)
+
+    assert report.updated == expected_updated
+    assert report.complete
+    assert (diematic.sensors.boiler_temperature == 65.0) is reads_live
+    assert (diematic.service.burner_start_count == 0.0) is reads_live
+    assert (diematic.settings.primary_boiler_temperature == 80.0) is reads_config
+    assert (diematic.identity.year == 25) is reads_config
 
 
 @pytest.mark.parametrize(

@@ -143,12 +143,7 @@ def base_gtw26(
         force_zone_a=force_circuit_a,
         force_zone_b=force_circuit_b,
     )
-    device._build_base_components()
-    from modbus_connection.model import ComponentGroup
-
-    device._pool = ComponentGroup(unit, list(device._bundles.values()))
-    device._poll_group = device._pool
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.BASE, variant)
     return device
 
 
@@ -169,20 +164,7 @@ def isystem_gtw26(
         force_zone_b=force_circuit_b,
         force_zone_c=force_circuit_c,
     )
-    device._build_isystem_components()
-    from modbus_connection.model import ComponentGroup
-
-    read_once = {"config", *(f"schedules.{name}" for name in SCHEDULE_BASES)}
-    device._pool = ComponentGroup(
-        unit, [component for name, component in device._bundles.items() if name not in read_once]
-    )
-    device._read_once = frozenset(read_once)
-    device._pending_once = {name: device._bundles[name] for name in read_once}
-    device._poll_group = device._pool
-    device.config._on_written = device._invalidate_read_once
-    for program in device.schedule.bundles().values():
-        program._on_day_written = device._invalidate_read_once
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.ISYSTEM, variant)
     return device
 
 

@@ -20,6 +20,7 @@ from aio_remeha_modbus.gtw26.const import (
     BASE_WINDOWS,
     ISYSTEM_IDENTITY_BLOCKS,
     ISYSTEM_WINDOWS,
+    MESSAGE_SPACING,
     MODEL_CODES,
     ControllerGeneration,
     RegisterLayout,
@@ -106,8 +107,9 @@ class GTW26Detection:
     """Describe a GTW26 detection attempt and its probe evidence.
 
     On success, `device` is a fully constructed, ready-to-use `GTW26` facade.
-    Constructing it applies the required message spacing on the unit, unlike
-    GTW08's detection, which only reports a main board descriptor.
+    Constructing it applies the message spacing the detection was given (the
+    `MESSAGE_SPACING` default by default) on the unit, unlike GTW08's
+    detection, which only reports a main board descriptor.
     """
 
     device: GTW26 | None
@@ -158,18 +160,23 @@ def _block_values(blocks: tuple[ProbeBlock, ...], address: int) -> tuple[int, ..
     return None
 
 
-async def async_detect(unit: ModbusUnit) -> GTW26Detection:
-    """Detect the GTW26 layout and retain all identity probe evidence.
+async def _async_probe(
+    unit: ModbusUnit,
+    *,
+    base_only: bool,
+    message_spacing_seconds: float,
+) -> GTW26Detection:
+    """Probe the identity blocks and freeze the evidence into one detection.
 
-    A wrong-device answer is reported through a failed detection result.
-    Only transient or unknown `ModbusError` instances propagate.
+    ``base_only`` skips the iSystem blocks, for a caller that already knows the
+    base layout answers and only needs its controller generation.
     """
     base_probe = await _async_read_blocks(unit, BASE_IDENTITY_BLOCKS)
-    isystem_probe = await _async_read_blocks(unit, ISYSTEM_IDENTITY_BLOCKS)
+    isystem_probe = () if base_only else await _async_read_blocks(unit, ISYSTEM_IDENTITY_BLOCKS)
     type_values = _block_values(base_probe, 457)
     type_code = type_values[0] if type_values is not None else None
     generation = BASE_GENERATIONS.get(type_code) if type_code is not None else None
-    isystem_detected = all(block.outcome == "success" for block in isystem_probe)
+    isystem_detected = not base_only and all(block.outcome == "success" for block in isystem_probe)
     base_detected = generation is not None and all(
         block.outcome == "success" for block in base_probe
     )
@@ -194,13 +201,51 @@ async def async_detect(unit: ModbusUnit) -> GTW26Detection:
     if type_code is not None and type_code in MODEL_CODES and generation is None:
         return result(None, DetectionFailureReason.UNKNOWN_MODEL)
     if isystem_detected:
-        device = GTW26("GTW26", unit, layout=RegisterLayout.ISYSTEM, generation=generation)
+        device = GTW26(
+            "GTW26",
+            unit,
+            layout=RegisterLayout.ISYSTEM,
+            generation=generation,
+            message_spacing_seconds=message_spacing_seconds,
+        )
         return result(device, None)
     if base_detected:
         assert generation is not None
-        device = GTW26("GTW26", unit, layout=RegisterLayout.BASE, generation=generation)
+        device = GTW26(
+            "GTW26",
+            unit,
+            layout=RegisterLayout.BASE,
+            generation=generation,
+            message_spacing_seconds=message_spacing_seconds,
+        )
         return result(device, None)
     return result(None, DetectionFailureReason.NOT_A_GTW26)
+
+
+async def async_detect(
+    unit: ModbusUnit, *, message_spacing_seconds: float = MESSAGE_SPACING
+) -> GTW26Detection:
+    """Detect the GTW26 layout and retain all identity probe evidence.
+
+    A wrong-device answer is reported through a failed detection result.
+    Only transient or unknown `ModbusError` instances propagate.
+    ``message_spacing_seconds`` is the spacing the discovered device enforces
+    on ``unit``, so a caller-configured spacing survives detection.
+    """
+    return await _async_probe(
+        unit, base_only=False, message_spacing_seconds=message_spacing_seconds
+    )
+
+
+async def async_detect_base(
+    unit: ModbusUnit, *, message_spacing_seconds: float = MESSAGE_SPACING
+) -> GTW26Detection:
+    """Probe only the base identity blocks to resolve the controller generation.
+
+    The iSystem blocks are skipped, so a caller that already knows the base
+    layout answers pays for three reads instead of five.
+    """
+    return await _async_probe(unit, base_only=True, message_spacing_seconds=message_spacing_seconds)
 
 
 async def async_probe(unit: ModbusUnit) -> GTW26:

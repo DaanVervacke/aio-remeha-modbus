@@ -5,14 +5,14 @@ import asyncio
 from datetime import time
 
 from dateutil.tz import gettz
-from modbus_connection import ModbusError
+from modbus_connection import ModbusConnectionError, ModbusError
 from modbus_connection.cli_helper import (
     CountingUnit,
     add_connection_args,
     connect_from_args,
     print_component,
 )
-from modbus_connection.model import Component
+from modbus_connection.model import Component, UpdateReport
 
 from aio_remeha_modbus.gtw08 import GTW08
 from aio_remeha_modbus.gtw08.appliance import Appliance
@@ -209,6 +209,43 @@ async def _run_gtw08(args: argparse.Namespace, unit: CountingUnit) -> int:
     return 0
 
 
+async def _poll_gtw26_sections(device: GTW26, args: argparse.Namespace) -> UpdateReport:
+    """Poll only the sections the CLI prints, plus the always-printed presence data."""
+    report = UpdateReport()
+    climate_zones = device.climate_zones
+    assert climate_zones is not None
+    targets: list[tuple[str, Component | None]] = [
+        ("identity", device.identity),
+        ("hot_water", device.hot_water),
+        *[(f"climate_zone_{letter.lower()}", zone) for letter, zone in climate_zones.items()],
+    ]
+    requested: list[tuple[bool, str, Component | None]] = [
+        (args.sensors, "sensors", device.sensors),
+        (args.settings, "settings", device.settings),
+        (args.config, "config", device.config),
+        (args.outputs, "outputs", device.outputs),
+        (args.service, "service", device.service),
+        (args.diagnostics, "diagnostics", device.diagnostics),
+    ]
+    targets += [(name, component) for flag, name, component in requested if flag]
+    if args.schedules and device.schedule is not None:
+        targets += [
+            (f"schedules.{name}", program) for name, program in device.schedule.bundles().items()
+        ]
+    for name, component in targets:
+        if component is None:
+            continue
+        try:
+            await component.async_update()
+        except ModbusConnectionError:
+            raise
+        except ModbusError as err:
+            report.failed[name] = err
+        else:
+            report.updated.add(name)
+    return report
+
+
 async def _run_gtw26(args: argparse.Namespace, unit: CountingUnit) -> int:
     """Detect a GTW26 gateway, poll it and print the requested sections."""
     unit.set_message_spacing(MESSAGE_SPACING)
@@ -218,10 +255,19 @@ async def _run_gtw26(args: argparse.Namespace, unit: CountingUnit) -> int:
         _print_probe_evidence(detection)
         return 1
 
-    detected_layout = RegisterLayout.ISYSTEM if detection.isystem_detected else RegisterLayout.BASE
-    layout = RegisterLayout[args.layout.upper()] if args.layout is not None else detected_layout
-    device = GTW26(name="cli_api", unit=unit, layout=layout, generation=detection.generation)
-    report = await device.async_update()
+    if args.layout is None:
+        # Reuse the device detection constructed, so setup never probes again.
+        device = detection.device
+        assert device is not None
+    else:
+        device = GTW26(
+            name="cli_api",
+            unit=unit,
+            layout=RegisterLayout[args.layout.upper()],
+            generation=detection.generation,
+        )
+    await device.async_ensure_setup()
+    report = await device.async_update() if args.all else await _poll_gtw26_sections(device, args)
 
     _print_gtw26_header(device, detection)
     _print_section(device.identity, "Identity")

@@ -59,3 +59,8 @@ class ISystemSensors(Gtw26Component):
     burner_active = bit(427, 3)
     hot_water_pump_active = bit(427, 5)
     fault = fault_code(465, M3_GT_FAULTS)
+    # Runtime boiler values, not installer settings: they must refresh every poll.
+    max_fan_speed = integer(305, signed=False, nan=0xFFFF, unit="rpm")
+    calculated_setpoint = float10(436, unit="°C")
+    three_way_valve_bandwidth = float10(438)
+    modulated_power = integer(473, signed=False, unit="%")

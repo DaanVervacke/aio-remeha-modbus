@@ -4,6 +4,8 @@ from typing import Any, override
 
 from modbus_connection.model import Component
 
+from aio_remeha_modbus.gtw26.const import GTW26_MAX_SPAN
+
 
 class Gtw26Component(Component):
     """A GTW26 register bundle.
@@ -12,6 +14,8 @@ class Gtw26Component(Component):
     next `async_update()`. Register fields are stored in `_values` and bit fields
     in `_bits`.
     """
+
+    max_span = GTW26_MAX_SPAN
 
     @override
     async def write(self, field: str, value: Any) -> None:

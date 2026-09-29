@@ -17,6 +17,7 @@ from aio_remeha_modbus.gtw26 import (
     NightMode,
 )
 from aio_remeha_modbus.gtw26.const import (
+    GTW26_MAX_SPAN,
     ISYSTEM_WINDOWS,
     SCHEDULE_BASES,
     ControllerGeneration,
@@ -72,12 +73,7 @@ def base_gtw26(
         force_zone_a=force_circuit_a,
         force_zone_b=force_circuit_b,
     )
-    device._build_base_components()
-    from modbus_connection.model import ComponentGroup
-
-    device._pool = ComponentGroup(unit, list(device._bundles.values()))
-    device._poll_group = device._pool
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.BASE, variant)
     return device
 
 
@@ -98,20 +94,7 @@ def isystem_gtw26(
         force_zone_b=force_circuit_b,
         force_zone_c=force_circuit_c,
     )
-    device._build_isystem_components()
-    from modbus_connection.model import ComponentGroup
-
-    read_once = {"config", *(f"schedules.{name}" for name in SCHEDULE_BASES)}
-    device._pool = ComponentGroup(
-        unit, [component for name, component in device._bundles.items() if name not in read_once]
-    )
-    device._read_once = frozenset(read_once)
-    device._pending_once = {name: device._bundles[name] for name in read_once}
-    device._poll_group = device._pool
-    device.config._on_written = device._invalidate_read_once
-    for program in device.schedule.bundles().values():
-        program._on_day_written = device._invalidate_read_once
-    device._setup_complete = True
+    device._setup_bundles(RegisterLayout.ISYSTEM, variant)
     return device
 
 
@@ -297,8 +280,8 @@ async def test_isystem_config_and_diagnostics_decode(mock_modbus_unit):
     assert boiler.climate_zones["B"].circuit_type is CircuitType.THREE_WAY_VALVE
     assert boiler.climate_zones["C"].circuit_type is CircuitType.SWIMMING_POOL
     assert boiler.config.zone_a_min == 30.0
-    assert boiler.config.max_fan_speed == 5200
-    assert boiler.config.modulated_power == 1
+    assert boiler.sensors.max_fan_speed == 5200
+    assert boiler.sensors.modulated_power == 1
     assert boiler.diagnostics.boiler_active_mode == 5
     assert boiler.diagnostics.pcu_block == 255
     assert boiler.diagnostics.auxiliary_1_type is AuxiliaryType.DHW_LOAD
@@ -663,6 +646,103 @@ async def test_isystem_each_window_read_without_crossing_gaps(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
+async def test_isystem_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
+    _seed(mock_modbus_unit)
+    boiler = isystem_gtw26(mock_modbus_unit)
+
+    await boiler.async_update()
+
+    blocks = [
+        (event.address, event.count)
+        for event in mock_modbus_unit.read_events
+        if event.register_type == "holding"
+    ]
+    assert blocks
+    assert all(count <= GTW26_MAX_SPAN for _, count in blocks)
+
+
+_ISYSTEM_READINGS_BUNDLES = {
+    "sensors",
+    "hot_water",
+    "climate_zone_a",
+    "climate_zone_b",
+    "climate_zone_c",
+    "outputs",
+    "diagnostics",
+}
+_ISYSTEM_SETTINGS_BUNDLES = {"settings", "identity", "config"} | {
+    f"schedules.{name}" for name in SCHEDULE_BASES
+}
+
+
+@pytest.mark.parametrize(
+    ("update", "expected_updated", "reads_live", "reads_config"),
+    [
+        pytest.param(
+            GTW26.async_update_readings,
+            _ISYSTEM_READINGS_BUNDLES,
+            True,
+            False,
+            id="readings",
+        ),
+        pytest.param(
+            GTW26.async_update_settings,
+            _ISYSTEM_SETTINGS_BUNDLES,
+            False,
+            True,
+            id="settings",
+        ),
+        pytest.param(
+            GTW26.async_update,
+            _ISYSTEM_READINGS_BUNDLES | _ISYSTEM_SETTINGS_BUNDLES,
+            True,
+            True,
+            id="all",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_isystem_update_scope_polls_only_its_own_bundles(
+    mock_modbus_unit, update, expected_updated, reads_live, reads_config
+):
+    # Pooled blocks bridge gaps inside a declared window, so a poll physically
+    # touches foreign addresses; the split is asserted on the decoded values.
+    _seed(mock_modbus_unit)
+    boiler = isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.read_events.clear()
+
+    report = await update(boiler)
+
+    assert report.updated == expected_updated
+    assert report.complete
+    assert (boiler.sensors.boiler_temperature == 65.0) is reads_live
+    assert (boiler.hot_water.temperature == 50.0) is reads_live
+    assert (boiler.identity.software_version == 412) is reads_config
+    assert (boiler.settings.summer_winter_temperature == 19.0) is reads_config
+    assert (boiler.config.autoadapt_a == 0.0) is reads_config
+
+
+@pytest.mark.asyncio
+async def test_isystem_runtime_boiler_values_refresh_every_poll(mock_modbus_unit):
+    _seed(mock_modbus_unit)
+    mock_modbus_unit.holding.update({305: 5200, 436: 550, 438: 60, 473: 42})
+    boiler = isystem_gtw26(mock_modbus_unit)
+
+    await boiler.async_update()
+    assert boiler.sensors.max_fan_speed == 5200
+    assert boiler.sensors.calculated_setpoint == 55.0
+    assert boiler.sensors.three_way_valve_bandwidth == 6.0
+    assert boiler.sensors.modulated_power == 42
+
+    mock_modbus_unit.holding.update({305: 4800, 436: 500, 438: 55, 473: 30})
+    await boiler.async_update()
+    assert boiler.sensors.max_fan_speed == 4800
+    assert boiler.sensors.calculated_setpoint == 50.0
+    assert boiler.sensors.three_way_valve_bandwidth == 5.5
+    assert boiler.sensors.modulated_power == 30
+
+
+@pytest.mark.asyncio
 async def test_isystem_group_planning_uses_declared_windows(mock_modbus_unit):
     _seed(mock_modbus_unit)
     boiler = isystem_gtw26(mock_modbus_unit)
@@ -679,7 +759,9 @@ async def test_isystem_group_planning_uses_declared_windows(mock_modbus_unit):
     ):
         assert component.register_ranges == ISYSTEM_WINDOWS
         assert component._resolved_ranges().for_space("holding") == ISYSTEM_WINDOWS
-    assert boiler._poll_group._ranges.for_space("holding") == ISYSTEM_WINDOWS
+    assert boiler._pool._ranges.for_space("holding") == ISYSTEM_WINDOWS
+    assert boiler._readings_pool._ranges.for_space("holding") == ISYSTEM_WINDOWS
+    assert boiler._settings_pool._ranges.for_space("holding") == ISYSTEM_WINDOWS
 
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
