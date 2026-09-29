@@ -96,7 +96,8 @@ Pass a `RegisterLayout` to the `GTW26` constructor to override the detected layo
 
 GTW-26 controllers need at least 50 ms between Modbus messages. The `GTW26` constructor applies
 this spacing automatically through its `message_spacing_seconds` parameter.
-Pass a different value to override it.
+Pass a different value to override it. Unlike `GTW08`, the constructor leaves the unit's request
+timeout unchanged unless you pass `request_timeout`.
 
 ### GTW-26 device
 To create a new API instance, provide the `ModbusUnit` instance to the `GTW26` constructor.
