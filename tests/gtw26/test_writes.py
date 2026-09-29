@@ -662,7 +662,7 @@ async def test_isystem_panel_and_tuning_writes(
 @pytest.mark.asyncio
 async def test_isystem_psu_settings_stay_read_only(
     mock_modbus_unit: MockModbusUnit,
-    field,
+    field: str,
     isystem_gtw26: Gtw26Factory,
 ):
     boiler = await isystem_gtw26(mock_modbus_unit)

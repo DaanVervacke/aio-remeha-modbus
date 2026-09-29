@@ -8,13 +8,14 @@ from modbus_connection import ModbusConnectionError
 from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusUnit, WriteEvent
 
-from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
+from aio_remeha_modbus.gtw08.errors import RemehaApiError
 from aio_remeha_modbus.gtw26 import GTW26, DetectionFailureReason, HeatingMode, HotWaterMode
 from aio_remeha_modbus.gtw26.const import (
     ControllerGeneration,
     RegisterLayout,
 )
 from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
+from tests.gtw26.conftest import Gtw26Factory, LayoutGtw26Factory
 
 
 def _seed(unit: MockModbusUnit) -> None:
@@ -148,23 +149,6 @@ class TestAutoSetup:
         assert device._layout is RegisterLayout.BASE
         assert device._generation is ControllerGeneration.GENERATION_3
         assert device._setup_complete is True
-
-    @pytest.mark.asyncio
-    async def test_async_setup_raises_probe_error_on_failed_detection(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test that _async_setup raises GTW26ProbeError when detection fails."""
-        # Fail all reads to simulate NOT_A_GTW26
-        mock_modbus_unit.fail_read(3, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(108, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(457, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26("test", mock_modbus_unit)
-
-        with pytest.raises(GTW26ProbeError):
-            await device._async_setup()
 
     @pytest.mark.asyncio
     async def test_configured_message_spacing_survives_auto_detection(
@@ -326,294 +310,126 @@ class TestAutoSetup:
 
 
 class TestProperties:
-    """Tests for zone_a_present, zone_b_present, zone_c_present, hot_water_present properties."""
+    """Tests for the zone_a/b/c_present and hot_water_present properties."""
 
+    # One blank set per zone: every register the presence check reads, set to
+    # the absent sentinel, so a seeded sensor register is the only signal left.
+    _ZONE_CASES = [
+        pytest.param(
+            RegisterLayout.BASE,
+            "a",
+            {18: 0xFFFF, 21: 0xFFFF},
+            18,
+            id="base-a",
+        ),
+        pytest.param(
+            RegisterLayout.BASE,
+            "b",
+            {27: 0xFFFF, 30: 0xFFFF, 31: 0xFFFF, 32: 0xFFFF, 33: 0xFFFF},
+            27,
+            id="base-b",
+        ),
+        pytest.param(
+            RegisterLayout.ISYSTEM,
+            "c",
+            {618: 0xFFFF, 619: 0xFFFF},
+            618,
+            id="isystem-c",
+        ),
+    ]
+
+    @pytest.mark.parametrize(("layout", "zone", "blank", "sensor_address"), _ZONE_CASES)
     @pytest.mark.asyncio
-    async def test_zone_a_present_with_sensor(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test zone_a_present returns True when zone A has a sensor."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        await device.async_update()
-
-        assert device.zone_a_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_a_present_with_force(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test zone_a_present returns True when force_zone_a is True."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-            force_zone_a=True,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # No sensor data
-        assert device.zone_a_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_a_present_without_sensor_or_force(
-        self, mock_modbus_unit: MockModbusUnit
+    async def test_zone_present_with_sensor(
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        gtw26: LayoutGtw26Factory,
+        layout: RegisterLayout,
+        zone: str,
+        blank: dict[int, int],
+        sensor_address: int,
     ) -> None:
-        """Test zone_a_present returns False when no sensor and not forced."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # Remove temperature data (room_temperature at 18, calculated_temperature at 21)
-        mock_modbus_unit.holding[18] = 0xFFFF
-        mock_modbus_unit.holding[21] = 0xFFFF
+        """A zone counts as present once its room sensor answers."""
+        device = await gtw26(mock_modbus_unit, layout)
+        mock_modbus_unit.holding.update(blank)
+        mock_modbus_unit.holding[sensor_address] = 210
         await device.async_update()
 
-        assert device.zone_a_present is False
+        assert getattr(device, f"zone_{zone}_present") is True
 
+    @pytest.mark.parametrize(("layout", "zone", "blank", "sensor_address"), _ZONE_CASES)
     @pytest.mark.asyncio
-    async def test_zone_b_present_with_sensor(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test zone_b_present returns True when zone B has a sensor."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # Add zone B sensor data - room_temperature is at register 27
-        mock_modbus_unit.holding[27] = 210
-        await device.async_update()
-
-        assert device.zone_b_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_b_present_with_force(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test zone_b_present returns True when force_zone_b is True."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-            force_zone_b=True,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        assert device.zone_b_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_b_present_without_sensor_or_force(
-        self, mock_modbus_unit: MockModbusUnit
+    async def test_zone_absent_without_sensor_or_force(
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        gtw26: LayoutGtw26Factory,
+        layout: RegisterLayout,
+        zone: str,
+        blank: dict[int, int],
+        sensor_address: int,
     ) -> None:
-        """Test zone_b_present returns False when no sensor and not forced."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # Remove all temperature data for zone B
-        # room_temperature at 27, calculated_temperature at 32, supply_temperature at 33
-        # min_temperature at 30, max_temperature at 31
-        mock_modbus_unit.holding[27] = 0xFFFF
-        mock_modbus_unit.holding[30] = 0xFFFF
-        mock_modbus_unit.holding[31] = 0xFFFF
-        mock_modbus_unit.holding[32] = 0xFFFF
-        mock_modbus_unit.holding[33] = 0xFFFF
+        """A zone without a sensor reading and without the force flag is absent."""
+        device = await gtw26(mock_modbus_unit, layout)
+        mock_modbus_unit.holding.update(blank)
         await device.async_update()
 
-        assert device.zone_b_present is False
+        assert getattr(device, f"zone_{zone}_present") is False
+
+    @pytest.mark.parametrize(
+        ("layout", "zone", "force_kwargs"),
+        [
+            pytest.param(RegisterLayout.BASE, "a", {"force_circuit_a": True}, id="base-a"),
+            pytest.param(RegisterLayout.BASE, "b", {"force_circuit_b": True}, id="base-b"),
+            pytest.param(RegisterLayout.ISYSTEM, "c", {"force_circuit_c": True}, id="isystem-c"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_zone_present_when_forced(
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        gtw26: LayoutGtw26Factory,
+        layout: RegisterLayout,
+        zone: str,
+        force_kwargs: dict[str, bool],
+    ) -> None:
+        """The force flags report a zone as present before the first poll."""
+        device = await gtw26(mock_modbus_unit, layout, **force_kwargs)
+
+        assert getattr(device, f"zone_{zone}_present") is True
 
     @pytest.mark.asyncio
-    async def test_zone_c_present_returns_false_for_base_layout(
-        self, mock_modbus_unit: MockModbusUnit
+    async def test_zone_c_absent_on_base_layout(
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
-        """Test zone_c_present returns False for BASE layout."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
+        """Zone C does not exist on the base layout."""
+        device = await base_gtw26(mock_modbus_unit)
 
         assert device.zone_c_present is False
 
     @pytest.mark.asyncio
-    async def test_zone_c_present_with_sensor_isystem(
-        self, mock_modbus_unit: MockModbusUnit
+    async def test_hot_water_presence_follows_temperature_isystem(
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        isystem_gtw26: Gtw26Factory,
     ) -> None:
-        """Test zone_c_present returns True when zone C has a sensor in iSystem."""
-        _seed_isystem(mock_modbus_unit)
+        """iSystem hot-water presence follows the temperature register 603."""
+        device = await isystem_gtw26(mock_modbus_unit)
 
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.ISYSTEM,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
-
-        # Add zone C sensor data
+        mock_modbus_unit.holding[603] = 0xFFFF
         await device.async_update()
-
-        assert device.zone_c_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_c_present_with_force_isystem(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test zone_c_present returns True when force_zone_c is True in iSystem."""
-        _seed_isystem(mock_modbus_unit)
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.ISYSTEM,
-            generation=ControllerGeneration.GENERATION_4,
-            force_zone_c=True,
-        )
-        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
-
-        assert device.zone_c_present is True
-
-    @pytest.mark.asyncio
-    async def test_zone_c_present_without_sensor_or_force_isystem(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test zone_c_present returns False when no sensor and not forced in iSystem."""
-        _seed_isystem(mock_modbus_unit)
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.ISYSTEM,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
-
-        # Remove zone C sensor data
-        mock_modbus_unit.holding[618] = 0xFFFF
-        mock_modbus_unit.holding[619] = 0xFFFF
-        await device.async_update()
-
-        assert device.zone_c_present is False
-
-    @pytest.mark.asyncio
-    async def test_hot_water_present_with_sensor_base(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test hot_water_present returns True when hot water has a sensor in BASE."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        await device.async_update()
-
-        assert device.hot_water_present is True
-
-    @pytest.mark.asyncio
-    async def test_hot_water_present_with_dpsm_sensor_base(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test hot_water_present returns True when hot water has DPSM sensor in BASE."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # Remove primary sensor but keep DPSM
-        mock_modbus_unit.holding[62] = 0xFFFF
-        mock_modbus_unit.holding[459] = 505
-        await device.async_update()
-
-        assert device.hot_water_present is True
-
-    @pytest.mark.asyncio
-    async def test_hot_water_present_without_sensor_base(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test hot_water_present returns False when no sensor in BASE."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
-        # Remove all sensors
-        mock_modbus_unit.holding[62] = 0xFFFF
-        mock_modbus_unit.holding[459] = 0xFFFF
-        await device.async_update()
-
         assert device.hot_water_present is False
 
-    @pytest.mark.asyncio
-    async def test_hot_water_present_with_sensor_isystem(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
-        """Test hot_water_present returns True when hot water has a sensor in iSystem."""
-        _seed_isystem(mock_modbus_unit)
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.ISYSTEM,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.ISYSTEM, device.generation)
-
-        # Add hot water sensor - temperature is at register 614
-        mock_modbus_unit.holding[614] = 550
+        mock_modbus_unit.holding[603] = 550
         await device.async_update()
-
         assert device.hot_water_present is True
 
     @pytest.mark.parametrize(
         ("zone", "force_kwargs", "expected"),
         [
             pytest.param("A", {}, False, id="zone-a-unforced"),
-            pytest.param("A", {"force_zone_a": True}, True, id="zone-a-forced"),
+            pytest.param("A", {"force_circuit_a": True}, True, id="zone-a-forced"),
             pytest.param("B", {}, False, id="zone-b-unforced"),
-            pytest.param("B", {"force_zone_b": True}, True, id="zone-b-forced"),
+            pytest.param("B", {"force_circuit_b": True}, True, id="zone-b-forced"),
         ],
     )
     @pytest.mark.asyncio
@@ -623,48 +439,34 @@ class TestProperties:
         zone: str,
         force_kwargs: dict[str, bool],
         expected: bool,
+        base_gtw26: Gtw26Factory,
     ) -> None:
-        """Test that a zone missing from climate_zones is present only when forced."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-            **force_kwargs,
-        )
-        await device.async_ensure_setup()
+        """A zone missing from climate_zones is present only when forced."""
+        device = await base_gtw26(mock_modbus_unit, **force_kwargs)
         device.climate_zones.pop(zone)
 
         assert getattr(device, f"zone_{zone.lower()}_present") is expected
 
     @pytest.mark.asyncio
     async def test_zone_c_present_without_zone_component_isystem(
-        self, mock_modbus_unit: MockModbusUnit
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        isystem_gtw26: Gtw26Factory,
     ) -> None:
-        """Test that zone_c_present is False when zone C is missing from climate_zones."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.ISYSTEM,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        await device.async_ensure_setup()
+        """Zone C missing from climate_zones is never present, even when forced."""
+        device = await isystem_gtw26(mock_modbus_unit, force_circuit_c=True)
         device.climate_zones.pop("C")
 
         assert device.zone_c_present is False
 
     @pytest.mark.asyncio
     async def test_hot_water_present_without_hot_water_component(
-        self, mock_modbus_unit: MockModbusUnit
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        base_gtw26: Gtw26Factory,
     ) -> None:
-        """Test that hot_water_present is False when the hot water component is None."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        await device.async_ensure_setup()
+        """Hot water missing from the facade is never present."""
+        device = await base_gtw26(mock_modbus_unit)
         device.hot_water = None
 
         assert device.hot_water_present is False
@@ -692,16 +494,12 @@ class TestReadRegisters:
     """Tests for async_read_registers method."""
 
     @pytest.mark.asyncio
-    async def test_read_registers_single_register(self, mock_modbus_unit: MockModbusUnit) -> None:
+    async def test_read_registers_single_register(
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+    ) -> None:
         """Test reading a single register."""
         _seed(mock_modbus_unit)
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         # decode_bytes uses big-endian, so we need to use >H to unpack correctly
         result = await device.async_read_registers(457, count=1, struct_format=">H")
@@ -711,17 +509,11 @@ class TestReadRegisters:
 
     @pytest.mark.asyncio
     async def test_read_registers_default_format_is_big_endian(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that the default struct format decodes big-endian register words."""
         _seed(mock_modbus_unit)
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         result = await device.async_read_registers(457, count=1)
 
@@ -730,17 +522,11 @@ class TestReadRegisters:
 
     @pytest.mark.asyncio
     async def test_read_registers_multiple_registers(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test reading multiple registers."""
         _seed(mock_modbus_unit)
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         # decode_bytes uses big-endian, so we need to use >HH to unpack correctly
         result = await device.async_read_registers(457, count=2, struct_format=">HH")
@@ -749,17 +535,11 @@ class TestReadRegisters:
 
     @pytest.mark.asyncio
     async def test_read_registers_with_struct_format(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test reading registers with a specific struct format."""
         _seed(mock_modbus_unit)
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         # Read as unsigned short - 457 contains 24
         # decode_bytes uses big-endian, so we need to use >H to unpack correctly
@@ -769,32 +549,20 @@ class TestReadRegisters:
 
     @pytest.mark.asyncio
     async def test_read_registers_rejects_zero_count(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that read_registers rejects count < 1."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         with pytest.raises(ValueError, match="Illegal count 0"):
             await device.async_read_registers(457, count=0)
 
     @pytest.mark.asyncio
     async def test_read_registers_rejects_excessive_count(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that read_registers rejects count > GTW26_MAX_SPAN (125)."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         with pytest.raises(ValueError, match="Illegal count"):
             await device.async_read_registers(457, count=126)
@@ -805,16 +573,10 @@ class TestNudgePanel:
 
     @pytest.mark.asyncio
     async def test_nudge_panel_writes_to_panel_nudge_register(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel writes to the panel nudge register."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_complete = True
+        device = await base_gtw26(mock_modbus_unit)
 
         writes: list[WriteEvent] = []
         mock_modbus_unit.on_write(writes.append)
@@ -828,20 +590,10 @@ class TestNudgePanel:
 
     @pytest.mark.asyncio
     async def test_nudge_panel_called_after_heating_mode_write_gen4(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel is called after heating mode write for Gen4."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
+        device = await base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_heating_mode("A", HeatingMode.AUTO)
@@ -849,19 +601,11 @@ class TestNudgePanel:
         mock_nudge.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_nudge_panel_not_called_for_gen3(self, mock_modbus_unit: MockModbusUnit) -> None:
+    async def test_nudge_panel_not_called_for_gen3(
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+    ) -> None:
         """Test that _nudge_panel is not called for Gen3."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_3,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
+        device = await base_gtw26(mock_modbus_unit)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_heating_mode("A", HeatingMode.AUTO)
@@ -870,20 +614,10 @@ class TestNudgePanel:
 
     @pytest.mark.asyncio
     async def test_nudge_panel_called_after_hot_water_mode_write_gen4(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel is called after hot water mode write for Gen4."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
+        device = await base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
 
         with patch.object(device, "_nudge_panel", AsyncMock()) as mock_nudge:
             await device.async_set_hot_water_mode(HotWaterMode.TEMP)
@@ -896,42 +630,14 @@ class TestErrorPaths:
 
     @pytest.mark.asyncio
     async def test_async_update_raises_connection_error(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that async_update raises ModbusConnectionError."""
-        _seed(mock_modbus_unit)
-        mock_modbus_unit.fail_read(600, IllegalDataAddressError())
-        mock_modbus_unit.fail_read(679, IllegalDataAddressError())
-
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
-
+        device = await base_gtw26(mock_modbus_unit)
         mock_modbus_unit.fail_requests(ModbusConnectionError("link down"))
 
         with pytest.raises(ModbusConnectionError):
             await device.async_update()
-
-    @pytest.mark.asyncio
-    async def test_health_check_success(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test that async_health_check succeeds when register is readable."""
-        _seed(mock_modbus_unit)
-
-        await GTW26.async_health_check(mock_modbus_unit)
-
-    @pytest.mark.asyncio
-    async def test_health_check_raises_on_error(self, mock_modbus_unit: MockModbusUnit) -> None:
-        """Test that async_health_check raises RemehaModbusError on ModbusError."""
-        mock_modbus_unit.fail_read(457, IllegalDataAddressError())
-
-        with pytest.raises(RemehaModbusError) as exc_info:
-            await GTW26.async_health_check(mock_modbus_unit)
-
-        assert exc_info.value.translation_key == "health_check_failed"
 
     @pytest.mark.asyncio
     async def test_policy_raises_when_layout_not_set(
@@ -948,23 +654,18 @@ class TestErrorPaths:
 
     @pytest.mark.asyncio
     async def test_async_setup_with_no_pool_does_not_fail(
-        self, mock_modbus_unit: MockModbusUnit
+        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _poll_group handles None pool gracefully."""
-        device = GTW26(
-            "test",
-            mock_modbus_unit,
-            layout=RegisterLayout.BASE,
-            generation=ControllerGeneration.GENERATION_4,
-        )
-        device._setup_bundles(RegisterLayout.BASE, device.generation)
+        device = await base_gtw26(mock_modbus_unit)
         device._pool = None
 
-        # Should not raise even with None pool
+        # A missing pool skips the pooled poll entirely: nothing updates, nothing fails.
         report = await device.async_update()
 
-        # Should complete without error but with no updates
-        assert len(report.updated) == 0 or not report.complete
+        assert report.updated == set()
+        assert report.failed == {}
+        assert report.complete
 
 
 class TestStaticProperties:

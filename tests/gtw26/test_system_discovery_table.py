@@ -1,5 +1,10 @@
 import pytest
-from modbus_connection import ModbusConnectionError, ModbusTimeoutError, ServerDeviceBusyError
+from modbus_connection import (
+    ModbusConnectionError,
+    ModbusError,
+    ModbusTimeoutError,
+    ServerDeviceBusyError,
+)
 from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusUnit
 
@@ -43,7 +48,9 @@ def _seed_isystem(unit) -> None:
     ],
 )
 @pytest.mark.asyncio
-async def test_probe_base_layout(mock_modbus_unit, type_code, variant):
+async def test_probe_base_layout(
+    mock_modbus_unit: MockModbusUnit, type_code: int, variant: ControllerGeneration
+):
     _seed_base(mock_modbus_unit, type_code)
 
     detection = await GTW26.async_detect(mock_modbus_unit)
@@ -59,7 +66,7 @@ async def test_probe_base_layout(mock_modbus_unit, type_code, variant):
 
 @pytest.mark.parametrize("type_code", [20, 24], ids=["diematic_3", "diematic_4"])
 @pytest.mark.asyncio
-async def test_probe_isystem_layout(mock_modbus_unit, type_code):
+async def test_probe_isystem_layout(mock_modbus_unit: MockModbusUnit, type_code: int):
     _seed_base(mock_modbus_unit, type_code)
     _seed_isystem(mock_modbus_unit)
 
@@ -76,7 +83,7 @@ async def test_probe_isystem_layout(mock_modbus_unit, type_code):
 
 
 @pytest.mark.asyncio
-async def test_probe_accepts_isystem_without_base_identity(mock_modbus_unit):
+async def test_probe_accepts_isystem_without_base_identity(mock_modbus_unit: MockModbusUnit):
     _seed_isystem(mock_modbus_unit)
     mock_modbus_unit.fail_read(3, IllegalDataAddressError())
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
@@ -91,7 +98,7 @@ async def test_probe_accepts_isystem_without_base_identity(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_probe_returns_unknown_model_failure(mock_modbus_unit):
+async def test_probe_returns_unknown_model_failure(mock_modbus_unit: MockModbusUnit):
     _seed_base(mock_modbus_unit, 21)
     _seed_isystem(mock_modbus_unit)
 
@@ -105,7 +112,7 @@ async def test_probe_returns_unknown_model_failure(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_probe_returns_not_a_gtw26_failure(mock_modbus_unit):
+async def test_probe_returns_not_a_gtw26_failure(mock_modbus_unit: MockModbusUnit):
     mock_modbus_unit.fail_read(3, IllegalDataAddressError())
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
     mock_modbus_unit.fail_read(457, IllegalDataAddressError())
@@ -129,7 +136,9 @@ async def test_probe_returns_not_a_gtw26_failure(mock_modbus_unit):
     ],
 )
 @pytest.mark.asyncio
-async def test_probe_propagates_transport_errors(mock_modbus_unit, error_type, error):
+async def test_probe_propagates_transport_errors(
+    mock_modbus_unit: MockModbusUnit, error_type: type[ModbusError], error: ModbusError
+):
     _seed_isystem(mock_modbus_unit)
     mock_modbus_unit.fail_read(3, error)
     mock_modbus_unit.fail_read(457, error)
@@ -139,7 +148,7 @@ async def test_probe_propagates_transport_errors(mock_modbus_unit, error_type, e
 
 
 @pytest.mark.asyncio
-async def test_probe_retains_register_errors_as_evidence(mock_modbus_unit):
+async def test_probe_retains_register_errors_as_evidence(mock_modbus_unit: MockModbusUnit):
     _seed_base(mock_modbus_unit, 24)
     _seed_isystem(mock_modbus_unit)
     error = ServerDeviceBusyError("busy")
@@ -159,7 +168,7 @@ async def test_probe_retains_register_errors_as_evidence(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_probe_raises_probe_error_on_failed_detection(mock_modbus_unit):
+async def test_probe_raises_probe_error_on_failed_detection(mock_modbus_unit: MockModbusUnit):
     _seed_base(mock_modbus_unit, 21)
     _seed_isystem(mock_modbus_unit)
 
@@ -171,7 +180,7 @@ async def test_probe_raises_probe_error_on_failed_detection(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_facade_setup_raises_probe_error_on_failed_detection(mock_modbus_unit):
+async def test_facade_setup_raises_probe_error_on_failed_detection(mock_modbus_unit: MockModbusUnit):
     mock_modbus_unit.fail_read(3, IllegalDataAddressError())
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
     mock_modbus_unit.fail_read(457, IllegalDataAddressError())
@@ -186,7 +195,7 @@ async def test_facade_setup_raises_probe_error_on_failed_detection(mock_modbus_u
 
 
 @pytest.mark.asyncio
-async def test_health_check_reads_one_register(mock_modbus_unit):
+async def test_health_check_reads_one_register(mock_modbus_unit: MockModbusUnit):
     mock_modbus_unit.holding[457] = 24
 
     assert await GTW26.async_health_check(mock_modbus_unit) is None
@@ -200,7 +209,7 @@ async def test_health_check_reads_one_register(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_health_check_raises_translated_error(mock_modbus_unit):
+async def test_health_check_raises_translated_error(mock_modbus_unit: MockModbusUnit):
     mock_modbus_unit.fail_read(457, ModbusTimeoutError("timeout"))
 
     with pytest.raises(RemehaModbusError) as caught:
