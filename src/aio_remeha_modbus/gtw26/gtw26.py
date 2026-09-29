@@ -383,18 +383,29 @@ class GTW26(Device):
         raise RemehaApiError("layout_not_set_up")
 
     async def async_set_heating_mode(self, designation: str, mode: HeatingMode) -> None:
-        """Set one heating circuit mode while preserving hot-water bits."""
+        """Set one heating circuit mode while preserving hot-water bits.
+
+        Raises:
+            RemehaApiError: if `designation` names no zone of this layout, or
+                `mode` is `HeatingMode.HOLIDAY`.
+
+        """
         validated = HeatingMode(mode)
         if validated is HeatingMode.HOLIDAY:
             raise RemehaApiError("heating_mode_read_only")
         await self.async_ensure_setup()
         policy = self._policy()
+        if designation not in policy.mode_addresses:
+            raise RemehaApiError(
+                "unknown_zone_designation",
+                translation_placeholders={"designation": designation},
+            )
         address = policy.mode_addresses[designation]
         async with self._write_lock:
             (current,) = await self._unit.read_holding_registers(address, 1)
-            await self._unit.write_registers(
-                address, [(current & ~HEATING_MODE_MASK) | int(validated)]
-            )
+            word = (current & ~HEATING_MODE_MASK) | int(validated)
+            await self._unit.write_registers(address, [word])
+            self._retain_written_word(address, word)
             if policy.nudges_panel and self._generation is ControllerGeneration.GENERATION_4:
                 await self._nudge_panel()
 
@@ -409,9 +420,9 @@ class GTW26(Device):
                 for address in policy.hot_water_addresses
             ]
             for address, current in currents:
-                await self._unit.write_registers(
-                    address, [(current & ~HOT_WATER_MODE_MASK) | int(validated)]
-                )
+                word = (current & ~HOT_WATER_MODE_MASK) | int(validated)
+                await self._unit.write_registers(address, [word])
+                self._retain_written_word(address, word)
             if policy.nudges_panel and self._generation is ControllerGeneration.GENERATION_4:
                 await self._nudge_panel()
 
@@ -444,6 +455,26 @@ class GTW26(Device):
                     moment.year % 100,
                 ]
                 await self._unit.write_registers(policy.time_address, block)
+            self._retain_written_word(policy.time_address, moment.hour)
+            self._retain_written_word(policy.time_address + 1, moment.minute)
+            self._retain_written_word(policy.time_address + 2, moment.isoweekday())
+            date_address = (
+                policy.date_address if policy.date_address is not None else policy.time_address + 3
+            )
+            self._retain_written_word(date_address, moment.day)
+            self._retain_written_word(date_address + 1, moment.month)
+            self._retain_written_word(date_address + 2, moment.year % 100)
+
+    def _retain_written_word(self, address: int, word: int) -> None:
+        """Cache a written word in every component field that reads its address."""
+        for component in self._bundles.values():
+            for name, resolved in component.resolved_fields.items():
+                if (
+                    resolved.address == address
+                    and resolved.space == "holding"
+                    and resolved.count == 1
+                ):
+                    component._values[name] = resolved.field.decode([word])  # noqa: SLF001
 
     async def _nudge_panel(self) -> None:
         """Toggle the generation-4 panel refresh register after a mode write."""

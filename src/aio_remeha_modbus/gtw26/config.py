@@ -23,6 +23,7 @@ from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.helpers.fields import (
     enum_value,
     float10,
+    float10_range,
     int_clamp,
     masked_enum,
     multiplied_integer,
@@ -41,6 +42,8 @@ _BANDWIDTH = snap_clamp(1.0, 4.0, 16.0)
 _ZONE_A_MIN = snap_clamp(0.5, 10.0, 50.0)
 _ZONE_A_MAX = snap_clamp(0.5, 20.0, 120.0)
 _ANTICIPATION = snap_clamp(0.1, 0.0, 10.0)
+_BOILER_MIN = float10_range(30.0, 50.0)
+_BOILER_MAX = float10_range(50.0, 95.0)
 
 
 class Settings(Gtw26Component):
@@ -50,8 +53,8 @@ class Settings(Gtw26Component):
 
     frost_threshold = float10(9, writable=positive_float10, force_fc16=True, unit="°C")
     summer_winter_temperature = float10(8, writable=_SUMMER_WINTER, force_fc16=True, unit="°C")
-    boiler_minimum_temperature = float10(70, writable=True, force_fc16=True, unit="°C")
-    boiler_maximum_temperature = float10(71, writable=True, force_fc16=True, unit="°C")
+    boiler_minimum_temperature = float10(70, writable=_BOILER_MIN, force_fc16=True, unit="°C")
+    boiler_maximum_temperature = float10(71, writable=_BOILER_MAX, force_fc16=True, unit="°C")
     primary_boiler_temperature = float10(121, unit="°C")
 
 

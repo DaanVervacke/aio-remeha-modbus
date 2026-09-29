@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from datetime import time
 from enum import IntEnum, IntFlag
-from typing import TYPE_CHECKING, Any, overload, override
+from typing import Any, overload, override
 
 from modbus_connection import WordOrder
 from modbus_connection.model import (
@@ -15,9 +15,6 @@ from modbus_connection.model import (
     gauge,
     integer,
 )
-
-if TYPE_CHECKING:
-    from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
 def decode_bytes(words: list[int], word_order: WordOrder = "big") -> bytes:
@@ -150,7 +147,7 @@ class TimeStepsField(RegisterField[time]):
 
     @override
     def decode(self, words: list[int], scale_exponent: int | None = None) -> time | None:
-        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay  # noqa: PLC0415
 
         steps = words[0]
         if (steps & 0xFF) == TimeStepsField.nan:
@@ -160,7 +157,7 @@ class TimeStepsField(RegisterField[time]):
 
     @override
     def encode(self, value: time | None, scale_exponent: int | None = None) -> list[int]:
-        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+        from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay  # noqa: PLC0415
 
         if value is None:
             return [TimeStepsField.nan]
@@ -423,6 +420,8 @@ class Float10Field(RegisterField[float | None]):
     @override
     def encode(self, value: Any, scale_exponent: int | None = None) -> list[int]:
         tenths = round(abs(float(value)) * 10)
+        if tenths > _MAGNITUDE:
+            raise ValueError(f"value {value} exceeds the 3276.7 magnitude the register holds")
         if value < 0:
             tenths |= _SIGN_BIT
         return [tenths]
@@ -475,6 +474,15 @@ class _EnumValue[E: IntEnum]:
             return raw
 
 
+def _enum_member[E: IntEnum](enum_type: type[E]) -> WriteValidator:
+    """Reject writes whose value is not a member of `enum_type`."""
+
+    def validate(value: Any) -> E:
+        return enum_type(value)
+
+    return validate
+
+
 def enum_value[E: IntEnum](
     address: int,
     enum_type: type[E],
@@ -482,12 +490,15 @@ def enum_value[E: IntEnum](
     writable: bool = False,
     force_fc16: bool = False,
 ) -> NumberField[E | int]:
-    """Read an unsigned enum value while preserving unknown values."""
+    """Read an unsigned enum value while preserving unknown values.
+
+    A writable field rejects values that are not members of `enum_type`.
+    """
     return NumberField(
         address,
         signed=False,
         convert=_EnumValue(enum_type),
-        writable=writable,
+        writable=_enum_member(enum_type) if writable else False,
         force_fc16=force_fc16,
     )
 
@@ -512,6 +523,18 @@ def positive_float10(value: Any) -> float:
     if not 0.0 <= result <= 10.0:
         raise ValueError("value must be between 0 and 10 °C")
     return result
+
+
+def float10_range(low: float, high: float) -> WriteValidator:
+    """Reject tenths values outside the documented register range."""
+
+    def validate(value: Any) -> float:
+        result = float(value)
+        if not low <= result <= high:
+            raise ValueError(f"value must be between {low} and {high} °C")
+        return result
+
+    return validate
 
 
 class _CodeLabel:
@@ -579,6 +602,18 @@ def int_clamp(low: int, high: int) -> WriteValidator:
     return validate
 
 
+def int_range(low: int, high: int) -> WriteValidator:
+    """Reject requests outside the whole-number range `low` to `high`."""
+
+    def validate(value: Any) -> int:
+        result = round(float(value))
+        if not low <= result <= high:
+            raise ValueError(f"value must be between {low} and {high}")
+        return result
+
+    return validate
+
+
 def permanent_derogation(raw: int) -> bool | None:
     """Decode verified heating override modes independently of hot-water bits.
 
@@ -597,6 +632,7 @@ def permanent_derogation(raw: int) -> bool | None:
 
 def derogation_until_end(raw: int) -> bool | None:
     """Decode the documented timed-override bit for known heating modes."""
+    # The 0x20 bit is unverified: the annex documents bit 4 as the timed-override flag, and bits 5+ are undocumented.
     from aio_remeha_modbus.gtw26.const import HEATING_MODE_MASK, HeatingMode  # noqa: PLC0415
 
     mode = raw & HEATING_MODE_MASK

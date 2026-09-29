@@ -1,15 +1,14 @@
 """GTW26 model tests."""
 
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from modbus_connection.exceptions import IllegalFunctionError
-from modbus_connection.model import Component
 from modbus_connection.mock import MockModbusUnit
+from modbus_connection.model import Component, integer
 
 from aio_remeha_modbus.gtw26.model import Gtw26Component
 from aio_remeha_modbus.gtw26.sensors import Sensors
+from aio_remeha_modbus.helpers.fields import int_clamp, int_range
 
 
 class MockGtw26Component(Gtw26Component):
@@ -17,9 +16,8 @@ class MockGtw26Component(Gtw26Component):
 
     register_ranges = ((0, 10),)
     test_register = Sensors.outdoor_temperature
-
-    def __init__(self, unit: MockModbusUnit) -> None:
-        super().__init__(unit)
+    clamped_register = integer(1, signed=False, writable=int_clamp(0, 15))
+    ranged_register = integer(2, signed=False, writable=int_range(0, 15))
 
 
 class TestGtw26ComponentWrite:
@@ -48,15 +46,24 @@ class TestGtw26ComponentWrite:
     ) -> None:
         """Test that writing a register field retains the value in _values."""
         component = MockGtw26Component(mock_modbus_unit)
-        component._register_fields = {"test_register": 100}
-        component._values: dict[str, Any] = {}
 
-        # Mock the parent write to do nothing
         with patch.object(Component, "write", new_callable=AsyncMock):
             await component.write("test_register", 42)
 
-        # The value should be retained
-        assert component._values.get("test_register") == 42
+        assert component._values["test_register"] == 42  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_write_register_field_retains_validator_coerced_value(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that a clamping write retains the effective value, not the request."""
+        component = MockGtw26Component(mock_modbus_unit)
+
+        with patch.object(Component, "write", new_callable=AsyncMock) as mock_parent_write:
+            await component.write("clamped_register", 40)
+
+        mock_parent_write.assert_called_once_with(field="clamped_register", value=15)
+        assert component._values["clamped_register"] == 15  # noqa: SLF001
 
     @pytest.mark.asyncio
     async def test_write_bit_field_retains_value_in_bits(
@@ -64,15 +71,13 @@ class TestGtw26ComponentWrite:
     ) -> None:
         """Test that writing a bit field retains the value in _bits."""
         component = MockGtw26Component(mock_modbus_unit)
-        component._bit_fields = {"test_bit": 200}
-        component._bits: dict[str, bool] = {}
+        component._bit_fields = {"test_bit": 200}  # noqa: SLF001
+        component._bits = {}  # noqa: SLF001
 
-        # Mock the parent write to do nothing
         with patch.object(Component, "write", new_callable=AsyncMock):
             await component.write("test_bit", True)
 
-        # The value should be retained
-        assert component._bits.get("test_bit") is True
+        assert component._bits["test_bit"] is True  # noqa: SLF001
 
     @pytest.mark.asyncio
     async def test_write_unknown_field_raises_attribute_error(
@@ -90,12 +95,9 @@ class TestGtw26ComponentWrite:
     ) -> None:
         """Test that writing a read-only field raises AttributeError."""
         component = MockGtw26Component(mock_modbus_unit)
-        # Add a read-only field
-        component._register_fields = {"readonly_field": 100}
-        component._read_only_fields = {"readonly_field"}
 
-        with pytest.raises(AttributeError):
-            await component.write("readonly_field", 42)
+        with pytest.raises(AttributeError, match="read-only"):
+            await component.write("test_register", 42)
 
     @pytest.mark.asyncio
     async def test_write_invalid_value_raises_value_error(
@@ -103,16 +105,23 @@ class TestGtw26ComponentWrite:
     ) -> None:
         """Test that writing an invalid value raises ValueError."""
         component = MockGtw26Component(mock_modbus_unit)
-        component._register_fields = {"test_field": 100}
 
-        # Mock the parent write to raise ValueError
-        async def raise_value_error(*args: Any, **kwargs: Any) -> None:
-            raise ValueError("Invalid value")
+        with pytest.raises(ValueError, match="convert"):
+            await component.write("clamped_register", "invalid")
 
-        with patch.object(
-            Component,
-            "write",
-            side_effect=raise_value_error,
-        ):
-            with pytest.raises(ValueError):
-                await component.write("test_field", "invalid")
+    @pytest.mark.parametrize("value", [-1, 16, 40])
+    @pytest.mark.asyncio
+    async def test_rejected_write_raises_before_io(
+        self, mock_modbus_unit: MockModbusUnit, value: int
+    ) -> None:
+        """Test that an out-of-range write raises before any Modbus I/O."""
+        component = MockGtw26Component(mock_modbus_unit)
+        writes: list[object] = []
+        mock_modbus_unit.on_write(writes.append)
+
+        with pytest.raises(ValueError, match="between 0 and 15"):
+            await component.write("ranged_register", value)
+
+        assert writes == []
+        assert 2 not in mock_modbus_unit.holding
+        assert "ranged_register" not in component._values  # noqa: SLF001

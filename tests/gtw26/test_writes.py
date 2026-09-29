@@ -34,6 +34,18 @@ async def test_hot_water_pump_delay_writes_register_61(mock_modbus_unit):
     assert mock_modbus_unit.holding[61] == 3
 
 
+@pytest.mark.parametrize("value", [-1, 16, 40])
+@pytest.mark.asyncio
+async def test_base_hot_water_pump_delay_rejects_out_of_range(mock_modbus_unit, value: int):
+    diematic = base_gtw26(mock_modbus_unit)
+    writes = []
+    mock_modbus_unit.on_write(writes.append)
+    with pytest.raises(ValueError, match="between 0 and 15"):
+        await diematic.hot_water.write("pump_delay", value)
+    assert writes == []
+    assert 61 not in mock_modbus_unit.holding
+
+
 @pytest.mark.asyncio
 async def test_isystem_legionella_protection_writes_register_268(mock_modbus_unit):
     boiler = isystem_gtw26(mock_modbus_unit)
@@ -46,6 +58,28 @@ async def test_settings_boiler_max_writes(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit)
     await diematic.settings.write("boiler_maximum_temperature", 75)
     assert mock_modbus_unit.holding[71] == 750
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "address"),
+    [
+        pytest.param("boiler_minimum_temperature", 20.0, 70, id="min-below"),
+        pytest.param("boiler_minimum_temperature", 55.0, 70, id="min-above"),
+        pytest.param("boiler_maximum_temperature", 40.0, 71, id="max-below"),
+        pytest.param("boiler_maximum_temperature", 100.0, 71, id="max-above"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_settings_boiler_temperatures_reject_out_of_range(
+    mock_modbus_unit, field: str, value: float, address: int
+):
+    diematic = base_gtw26(mock_modbus_unit)
+    writes = []
+    mock_modbus_unit.on_write(writes.append)
+    with pytest.raises(ValueError, match="must be between"):
+        await diematic.settings.write(field, value)
+    assert writes == []
+    assert address not in mock_modbus_unit.holding
 
 
 @pytest.mark.asyncio
@@ -245,6 +279,7 @@ async def test_hot_water_setpoint_clamps_high(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit)
     await diematic.hot_water.write("comfort_target", 200)
     assert mock_modbus_unit.holding[59] == 800
+    assert diematic.hot_water.comfort_target == 80.0
 
 
 @pytest.mark.asyncio
@@ -252,6 +287,7 @@ async def test_zone_setpoint_half_degree_step(mock_modbus_unit):
     diematic = base_gtw26(mock_modbus_unit)
     await diematic.climate_zones["A"].write("comfort_target", 20.3)
     assert mock_modbus_unit.holding[14] == 205
+    assert diematic.climate_zones["A"].comfort_target == 20.5
 
 
 @pytest.mark.asyncio
@@ -451,6 +487,7 @@ async def test_isystem_hot_water_pump_delay_clamps_and_writes_register_61(
     assert mock_modbus_unit.holding[61] == 3
     await boiler.hot_water.write("pump_delay", 40)
     assert mock_modbus_unit.holding[61] == 15
+    assert boiler.hot_water.pump_delay == 15
 
 
 @pytest.mark.asyncio
@@ -552,3 +589,82 @@ async def test_isystem_circuit_limits_clamp(mock_modbus_unit, circuit, field, va
     boiler = isystem_gtw26(mock_modbus_unit)
     await boiler.climate_zones[circuit[-1].upper()].write(field, value)
     assert mock_modbus_unit.holding[address] == raw
+
+
+@pytest.mark.parametrize(
+    ("bundle", "field", "address"),
+    [
+        pytest.param("settings", "night_mode", 10, id="night_mode"),
+        pytest.param("hot_water", "priority", 674, id="priority"),
+        pytest.param("hot_water", "legionella_protection", 268, id="legionella_protection"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_isystem_enum_writes_reject_non_members(
+    mock_modbus_unit, bundle: str, field: str, address: int
+):
+    boiler = isystem_gtw26(mock_modbus_unit)
+    writes = []
+    mock_modbus_unit.on_write(writes.append)
+    with pytest.raises(ValueError, match="is not a valid"):
+        await getattr(boiler, bundle).write(field, 99)
+    assert writes == []
+    assert address not in mock_modbus_unit.holding
+
+
+@pytest.mark.parametrize("regulator_type", [base_gtw26, isystem_gtw26])
+@pytest.mark.asyncio
+async def test_unknown_zone_designation_rejected_before_io(mock_modbus_unit, regulator_type):
+    boiler = regulator_type(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
+    writes = []
+    mock_modbus_unit.on_write(writes.append)
+    with pytest.raises(
+        RemehaApiError, check=lambda e: e.translation_key == "unknown_zone_designation"
+    ):
+        await boiler.async_set_heating_mode("D", HeatingMode.AUTO)
+    assert mock_modbus_unit.read_events == []
+    assert writes == []
+
+
+@pytest.mark.asyncio
+async def test_setting_heating_mode_updates_zone_and_hot_water_cache(mock_modbus_unit):
+    mock_modbus_unit.holding[17] = 0x58
+    diematic = base_gtw26(mock_modbus_unit)
+    await diematic.async_set_heating_mode("A", HeatingMode.TEMP_DAY)
+    assert diematic.climate_zones["A"].mode is HeatingMode.TEMP_DAY
+    assert diematic.hot_water.mode is HotWaterMode.TEMP
+
+
+@pytest.mark.asyncio
+async def test_setting_hot_water_mode_updates_zone_and_hot_water_cache(mock_modbus_unit):
+    mock_modbus_unit.holding[17] = 0x58
+    mock_modbus_unit.holding[26] = 0x58
+    diematic = base_gtw26(mock_modbus_unit)
+    await diematic.async_set_hot_water_mode(HotWaterMode.PERM)
+    assert diematic.hot_water.mode is HotWaterMode.PERM
+    assert diematic.climate_zones["A"].mode is HeatingMode.AUTO
+    assert diematic.climate_zones["B"].mode is HeatingMode.AUTO
+
+
+@pytest.mark.asyncio
+async def test_isystem_heating_mode_write_updates_zone_and_hot_water_cache(mock_modbus_unit):
+    mock_modbus_unit.holding[659] = 0xC8
+    boiler = isystem_gtw26(mock_modbus_unit)
+    await boiler.async_set_heating_mode("B", HeatingMode.PERM_DAY)
+    assert boiler.climate_zones["B"].mode is HeatingMode.PERM_DAY
+    assert boiler.climate_zones["B"].permanent_derogation is True
+    assert boiler.climate_zones["B"].derogation_until_end is False
+    assert boiler.hot_water.mode == 0x40
+
+
+@pytest.mark.parametrize("regulator_type", [base_gtw26, isystem_gtw26])
+@pytest.mark.asyncio
+async def test_set_clock_updates_identity_cache(mock_modbus_unit, regulator_type):
+    boiler = regulator_type(mock_modbus_unit)
+    await boiler.async_set_clock(datetime(2026, 9, 4, 14, 5))
+    assert boiler.identity.hour == 14
+    assert boiler.identity.minute == 5
+    assert boiler.identity.weekday == 5
+    assert boiler.identity.day == 4
+    assert boiler.identity.month == 9
+    assert boiler.identity.year == 26

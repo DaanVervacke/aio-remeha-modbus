@@ -14,10 +14,18 @@ from aio_remeha_modbus.gtw26.const import (
     LegionellaProtection,
 )
 from aio_remeha_modbus.gtw26.model import Gtw26Component
-from aio_remeha_modbus.helpers.fields import enum_value, float10, int_clamp, masked_enum, snap_clamp
+from aio_remeha_modbus.helpers.fields import (
+    enum_value,
+    float10,
+    int_clamp,
+    int_range,
+    masked_enum,
+    snap_clamp,
+)
 
 _HOT_WATER = snap_clamp(1.0, 10.0, 80.0)
 _PUMP_DELAY = int_clamp(0, 15)
+_PUMP_DELAY_RANGE = int_range(0, 15)
 
 
 class HotWater(Gtw26Component):
@@ -27,7 +35,7 @@ class HotWater(Gtw26Component):
 
     temperature = float10(62, unit="°C")
     priority = masked_enum(60, 0xFF, HotWaterPriority)
-    pump_delay = integer(61, signed=False, writable=True, force_fc16=True, unit="min")
+    pump_delay = integer(61, signed=False, writable=_PUMP_DELAY_RANGE, force_fc16=True, unit="min")
     temperature_dpsm = float10(459, unit="°C")
     mode = masked_enum(17, HOT_WATER_MODE_MASK, HotWaterMode)
     comfort_target = float10(59, writable=_HOT_WATER, force_fc16=True, unit="°C")

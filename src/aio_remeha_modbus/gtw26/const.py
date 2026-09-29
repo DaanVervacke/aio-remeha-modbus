@@ -315,7 +315,7 @@ M3_GT_FAULTS: Final[dict[int, str]] = {
     0x0011: "Not Available",
     0x0012: "D32:5 RESET:ON/OFF",
     0x0013: "D37:TA-S SHORT-CIR",
-    0x0014: "D38:TA-S DISCONNEC",
+    0x0014: "D38:TA-S DISCONNEC",  # codespell:ignore
     0x0015: "D39:TA-S FAILURE",
     0x0016: "D50:OTH COM.FAIL",
     0x0017: "D51:DEF :SEE BOILER",
@@ -413,7 +413,7 @@ M3_GT_FAULTS: Final[dict[int, str]] = {
     0x2007: "L8:DEF.S.SOR.COMP",
     0x2008: "L9:DEF.H.P PAC",
     0x2009: "L10:DEF.B.P PAC",
-    0x200A: "L11:DEF.PRES.SOURC",
+    0x200A: "L11:DEF.PRES.SOURC",  # codespell:ignore
     0x200B: "L12:DEF.ANTI.SOUR.",
     0x200C: "L13:DEF.P.SOURCE",
     0x200D: "L14:DEF.ANTI.COND.",
@@ -474,7 +474,7 @@ C230_FAULTS: Final[dict[int, str]] = {
     0x0023: "EXCHAN.S.FAIL",
     0x0024: "STB EXCHANGE",
     0x0025: "TA-S SHORT-CIR",
-    0x0026: "TA-S DISCONNEC",
+    0x0026: "TA-S DISCONNEC",  # codespell:ignore
     0x0027: "TA-S FAILURE",
     0x0028: "MC COM.FAIL",
     0x0029: "AUX2.SENS.FAIL",

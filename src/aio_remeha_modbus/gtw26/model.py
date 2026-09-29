@@ -17,11 +17,19 @@ class Gtw26Component(Component):
     async def write(self, field: str, value: Any) -> None:
         """Write a writable register or coil by attribute name.
 
+        A successful write retains the effective value the validator produced
+        (the value actually sent to the controller) and returns it when the
+        field is read until the next `async_update()`.
+
         Raises:
             AttributeError: for an unknown or read-only field.
-            ValueError: if the value cannot be scaled.
+            ValueError: if the field's write validator rejects the value, or
+                the value cannot be scaled.
 
         """
+        resolved = self.resolved_fields.get(field)
+        if resolved is not None and callable(resolved.field.writable):
+            value = resolved.field.writable(value)
         await super().write(field=field, value=value)
         if field in self._register_fields:
             self._values[field] = value

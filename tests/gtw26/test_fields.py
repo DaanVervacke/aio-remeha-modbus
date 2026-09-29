@@ -50,6 +50,18 @@ def test_float10_encodes_negative_tenth_example():
     assert Float10Field(0).encode(-0.1) == [0x8001]
 
 
+def test_float10_encodes_full_magnitude():
+    assert Float10Field(0).encode(3276.7) == [0x7FFF]
+    assert Float10Field(0).encode(-3276.7) == [0xFFFF]
+
+
+@pytest.mark.parametrize("value", [3276.8, 4000.0, -3276.8, -4000.0])
+def test_float10_encode_rejects_magnitude_overflow(value: float):
+    # Above 3276.7 the tenths would overflow the 0x7FFF magnitude and flip the sign bit.
+    with pytest.raises(ValueError, match="exceeds the 3276.7 magnitude"):
+        Float10Field(0).encode(value)
+
+
 def test_snap_clamp_snaps_and_clamps_hot_water():
     validate = snap_clamp(5.0, 10.0, 80.0)
     assert validate(53) == 55.0
