@@ -1,6 +1,6 @@
 [project]
 name = "aio-remeha-modbus"
-version = "4.0.1"
+version = "4.1.0"
 description = "Async I/O modbus API for Remeha appliances"
 readme = "README.md"
 authors = [
