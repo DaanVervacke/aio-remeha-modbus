@@ -22,8 +22,8 @@ class Gtw26Component(Component):
         """Write a writable register or coil by attribute name.
 
         A successful write retains the effective value the validator produced
-        (the value actually sent to the controller) and returns it when the
-        field is read until the next `async_update()`.
+        (the value actually sent to the controller). Reading the field returns
+        that value until the next `async_update()`.
 
         Raises:
             AttributeError: for an unknown or read-only field.

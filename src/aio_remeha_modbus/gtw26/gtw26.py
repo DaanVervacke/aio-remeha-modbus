@@ -112,15 +112,6 @@ class GTW26(Device):
         service: Service component. None until setup complete.
         identity: Identity component. None until setup complete.
         schedule: Schedule component (iSystem only). None until setup complete.
-        _pool: ComponentGroup for pooled reads of all regular bundles.
-        _readings_pool: ComponentGroup for the live-value bundles.
-        _settings_pool: ComponentGroup for the configuration bundles.
-        _bundles: Dict of all component bundles by name.
-        _read_once: Frozenset of bundle names to read only once.
-        _pending_once: Dict of pending one-time read bundles.
-        _write_lock: Lock for serializing write operations.
-        _setup_complete: Flag indicating setup has completed.
-        _setup_lock: Lock for thread-safe setup.
 
     """
 
@@ -210,9 +201,8 @@ class GTW26(Device):
         A successful detection returns a fully constructed, ready-to-use `GTW26`
         device. Constructing it applies the message spacing the detection was
         given through `unit.set_message_spacing`, so a caller-configured spacing
-        survives detection when passed here.
-        See `GTW26Detection` for how this differs
-        from GTW08's detection.
+        survives detection when passed here. See `GTW26Detection` for the probe
+        evidence the result retains.
 
         Args:
             unit (ModbusUnit): The modbus unit to connect to the device.
@@ -247,8 +237,8 @@ class GTW26(Device):
         """Detect what is missing and construct the layout's register bundles.
 
         A known layout is never re-probed. The controller generation is resolved
-        from the base identity blocks when the base layout needs it; a missing
-        generation is a valid terminal state on the iSystem layout, whose write
+        from the base identity blocks when the base layout needs it. A missing
+        generation is a valid terminal state on the iSystem layout: its write
         policy never nudges the panel.
         """
         layout = self._layout

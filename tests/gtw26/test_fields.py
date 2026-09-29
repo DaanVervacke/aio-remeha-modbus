@@ -58,7 +58,7 @@ def test_float10_encodes_full_magnitude():
 @pytest.mark.parametrize("value", [3276.8, 4000.0, -3276.8, -4000.0])
 def test_float10_encode_rejects_magnitude_overflow(value: float):
     # Above 3276.7 the tenths would overflow the 0x7FFF magnitude and flip the sign bit.
-    with pytest.raises(ValueError, match="exceeds the 3276.7 magnitude"):
+    with pytest.raises(ValueError, match="exceeds the register's maximum magnitude of 3276.7"):
         Float10Field(0).encode(value)
 
 

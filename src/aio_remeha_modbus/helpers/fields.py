@@ -307,7 +307,7 @@ def int16(
     """Create a field containing a signed 16-bits integer.
 
     If `scale` is provided, a `gauge` is returned, otherwise an `integer`.
-    `nan` defaults to the INT16 null value `0x8000`; pass one or more raw values
+    `nan` defaults to the INT16 null value `0x8000`. Pass one or more raw values
     to override it.
     """
 
@@ -420,7 +420,7 @@ class Float10Field(RegisterField[float | None]):
     def encode(self, value: Any, scale_exponent: int | None = None) -> list[int]:
         tenths = round(abs(float(value)) * 10)
         if tenths > _MAGNITUDE:
-            raise ValueError(f"value {value} exceeds the 3276.7 magnitude the register holds")
+            raise ValueError(f"value {value} exceeds the register's maximum magnitude of 3276.7")
         if value < 0:
             tenths |= _SIGN_BIT
         return [tenths]

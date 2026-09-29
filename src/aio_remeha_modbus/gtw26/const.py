@@ -24,7 +24,7 @@ CLOCK_MARKER: Final[int] = 0xFF00
 """Marker OR-ed into each clock word on the base layout."""
 
 PANEL_NUDGE_REGISTER: Final[int] = 13
-"""Register a generation-4 base write toggles so the panel refreshes. Never read back."""
+"""Panel-refresh register toggled by generation-4 base writes. Never read back."""
 
 # Schedule layout. Each schedule is seven days of three registers, one day per read.
 SCHEDULE_BASES: Final[dict[str, int]] = {

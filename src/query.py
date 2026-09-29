@@ -154,7 +154,7 @@ def _print_schedule_sections(schedule: ScheduleFacade | None) -> None:
     if schedule is None:
         _print_section(None, "Schedules")
         return
-    print("\nHeating schedules below show P4, not necessarily the selected program.")  # noqa: T201
+    print("\nThe schedules below show P4, which is not necessarily the selected program.")  # noqa: T201
     for name, program in schedule.bundles().items():
         week = program.week
         title = f"Schedule {name}"

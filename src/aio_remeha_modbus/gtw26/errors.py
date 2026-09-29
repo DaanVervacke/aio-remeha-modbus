@@ -1,6 +1,6 @@
 """GTW26 API exceptions.
 
-The translateable base is `gtw08.errors`, reused here so a caller handles
+Translatable errors reuse the `gtw08.errors` base, so a caller handles
 one error shape for both gateways.
 """
 

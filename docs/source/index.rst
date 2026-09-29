@@ -1,7 +1,7 @@
 aio-remeha-modbus documentation
 ===============================
 
-`aio-remeha-modbus` is an async python API for Remeha appliances. It supports the
+`aio-remeha-modbus` is an async Python API for Remeha appliances. It supports the
 GTW-08 and GTW-26 Modbus gateways.
 
 .. toctree::
