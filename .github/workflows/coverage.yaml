@@ -46,7 +46,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' && github.actor != vars.RELEASE_BOT_COMMITTER_NAME }}
     steps:
       - name: Create the badge
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ab326b4825c5466a103921f42bf79ba9

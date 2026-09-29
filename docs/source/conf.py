@@ -3,7 +3,13 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path("../../src").resolve()))
+from sphinx.application import Sphinx
+from sphinx.ext import apidoc
+
+SOURCE_DIR = Path(__file__).parent.resolve()
+PACKAGE_DIR = (SOURCE_DIR / "../../src/aio_remeha_modbus").resolve()
+
+sys.path.insert(0, str(PACKAGE_DIR.parent))
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -15,18 +21,17 @@ sys.path.insert(0, str(Path("../../src").resolve()))
 project = "aio-remeha-modbus"
 copyright = "2026, houthacker"  # noqa: A001
 author = "houthacker"
-release = "4.0.0"
+release = "4.1.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon"]
 
+templates_path = ["_templates"]
 exclude_patterns = []
 
-# Sphinx cross-references bare `type[...]` builtin-generic annotations, which collide with
-# the documented `ClimateZone.type` and `DeviceBoardCategory.type` attributes and resolve
-# ambiguously. The annotations are valid Python, so suppress only that resolution warning.
+# The builtin `type` in annotations fuzzy-matches unrelated `.type` attributes.
 suppress_warnings = ["ref.python"]
 
 
@@ -34,3 +39,15 @@ suppress_warnings = ["ref.python"]
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "alabaster"
+
+
+def run_apidoc(_app: Sphinx) -> None:
+    """Regenerate the API reference pages from the package source."""
+
+    apidoc.main(["--force", "--no-toc", "--separate", "--module-first", "-o", str(SOURCE_DIR / "api"), str(PACKAGE_DIR)])
+
+
+def setup(app: Sphinx) -> None:
+    """Register the apidoc hook."""
+
+    app.connect("builder-inited", run_apidoc)

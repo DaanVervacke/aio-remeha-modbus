@@ -1,6 +1,6 @@
 [project]
 name = "aio-remeha-modbus"
-version = "4.0.0"
+version = "4.1.0"
 description = "Async I/O modbus API for Remeha appliances"
 readme = "README.md"
 authors = [
@@ -29,7 +29,7 @@ Documentation = "https://aio-remeha-modbus.readthedocs.io"
 remeha-query = "query:main"
 
 [build-system]
-requires = ["uv_build>=0.11.26,<0.12.0"]
+requires = ["uv_build>=0.11.26,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]

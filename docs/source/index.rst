@@ -8,7 +8,7 @@ GTW-08 and GTW-26 Modbus gateways.
    :maxdepth: 2
    :caption: Contents:
 
-   aio_remeha_modbus
+   api/aio_remeha_modbus
 
 Indices and tables
 ==================

@@ -183,6 +183,20 @@ def test_int16_scaled():
     assert field.encode(2.5) == [25]
 
 
+def test_int16_nan_override():
+    """Test that int16 accepts multiple nan values, for both plain and scaled fields."""
+
+    field = int16(10, nan=(0xFFFF, 0x8000))
+    assert field.decode([0xFFFF]) is None
+    assert field.decode([0x8000]) is None
+    assert field.decode([0xFFFE]) == -2
+
+    scaled = int16(10, scale=0.1, nan=(0xFFFF, 0x8000))
+    assert scaled.decode([0xFFFF]) is None
+    assert scaled.decode([0x8000]) is None
+    assert scaled.decode([0xFFFE]) == pytest.approx(-0.2)
+
+
 def test_uint16():
     """Test that uint16 is unsigned and treats `0xFFFF` as nan."""
 
