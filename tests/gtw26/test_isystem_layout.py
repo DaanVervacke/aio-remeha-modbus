@@ -1,7 +1,9 @@
+from collections.abc import Awaitable, Callable
 from datetime import time
 
 import pytest
 from modbus_connection.mock import MockModbusUnit
+from modbus_connection.model import UpdateReport
 
 from aio_remeha_modbus.gtw26 import (
     GTW26,
@@ -21,87 +23,52 @@ from aio_remeha_modbus.gtw26.const import (
     ISYSTEM_WINDOWS,
     SCHEDULE_BASES,
     ControllerGeneration,
-    RegisterLayout,
     Weekday,
 )
 from aio_remeha_modbus.gtw26.schedule import ComfortPeriod
+from tests.gtw26.conftest import Gtw26Factory
 
 
 def _seed(unit: MockModbusUnit) -> None:
-    unit.holding.update(
-        {
-            8: 190,
-            653: 0x08,
-            659: 0x58,
-            427: 0x38,
-            457: 24,
-            465: 0xFFFF,
-            600: 412,
-            601: 205,
-            602: 650,
-            603: 500,
-            605: 0xFFFF,
-            607: 0xFFFF,
-            609: 3000,
-            613: 34,
-            614: 210,
-            616: 0xFFFF,
-            617: 0xFFFF,
-            618: 225,
-            620: 700,
-            621: 0xFFFF,
-            622: 100,
-            623: 110,
-            624: 120,
-            662: 0xFFFF,
-            663: 0xFFFF,
-            650: 550,
-            672: 550,
-            684: 26,
-        }
-    )
-
-
-def base_gtw26(
-    unit, *, variant=ControllerGeneration.GENERATION_3, force_circuit_a=False, force_circuit_b=False
-):
-    device = GTW26(
-        "test",
-        unit,
-        layout=RegisterLayout.BASE,
-        generation=variant,
-        force_zone_a=force_circuit_a,
-        force_zone_b=force_circuit_b,
-    )
-    device._setup_bundles(RegisterLayout.BASE, variant)
-    return device
-
-
-def isystem_gtw26(
-    unit,
-    *,
-    variant=ControllerGeneration.GENERATION_4,
-    force_circuit_a=False,
-    force_circuit_b=False,
-    force_circuit_c=False,
-):
-    device = GTW26(
-        "test",
-        unit,
-        layout=RegisterLayout.ISYSTEM,
-        generation=variant,
-        force_zone_a=force_circuit_a,
-        force_zone_b=force_circuit_b,
-        force_zone_c=force_circuit_c,
-    )
-    device._setup_bundles(RegisterLayout.ISYSTEM, variant)
-    return device
+    unit.holding.update({
+        8: 190,
+        653: 0x08,
+        659: 0x58,
+        427: 0x38,
+        457: 24,
+        465: 0xFFFF,
+        600: 412,
+        601: 205,
+        602: 650,
+        603: 500,
+        605: 0xFFFF,
+        607: 0xFFFF,
+        609: 3000,
+        613: 34,
+        614: 210,
+        616: 0xFFFF,
+        617: 0xFFFF,
+        618: 225,
+        620: 700,
+        621: 0xFFFF,
+        622: 100,
+        623: 110,
+        624: 120,
+        662: 0xFFFF,
+        663: 0xFFFF,
+        650: 550,
+        672: 550,
+        684: 26,
+    })
 
 
 @pytest.mark.asyncio
-async def test_isystem_reads_decode_across_bundles(mock_modbus_unit):
+async def test_isystem_reads_decode_across_bundles(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
 
     assert boiler.sensors.outdoor_temperature == 20.5
@@ -135,10 +102,13 @@ async def test_isystem_reads_decode_across_bundles(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_parity_registers_decode(mock_modbus_unit):
+async def test_isystem_parity_registers_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({605: 247, 654: 3, 660: 3, 662: 100, 663: 420})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.climate_zones["A"].ambient_influence == 3
     assert boiler.climate_zones["B"].ambient_influence == 3
@@ -148,22 +118,23 @@ async def test_isystem_parity_registers_decode(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_research_registers_decode(mock_modbus_unit):
+async def test_isystem_research_registers_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    mock_modbus_unit.holding.update(
-        {
-            604: 800,
-            610: 8,
-            661: 8,
-            668: 3,
-            669: 7,
-            670: 100,
-            671: 500,
-            677: 200,
-            678: 750,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.holding.update({
+        604: 800,
+        610: 8,
+        661: 8,
+        668: 3,
+        669: 7,
+        670: 100,
+        671: 500,
+        677: 200,
+        678: 750,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.sensors.flue_gas_temperature == 80.0
     assert boiler.sensors.water_pressure == 0.8
@@ -177,8 +148,11 @@ async def test_isystem_research_registers_decode(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_b_valve_commands_decode_independently(mock_modbus_unit):
-    boiler = isystem_gtw26(mock_modbus_unit)
+async def test_isystem_b_valve_commands_decode_independently(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
+    boiler = await isystem_gtw26(mock_modbus_unit)
     circuit = boiler.climate_zones["B"]
     assert circuit.valve_opening is None
     assert circuit.valve_closing is None
@@ -196,10 +170,13 @@ async def test_isystem_b_valve_commands_decode_independently(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_derogation_bits_decode(mock_modbus_unit):
+async def test_isystem_derogation_bits_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({659: 0x02 | 0x40, 667: 0x08 | 0x80})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.climate_zones["B"].mode is HeatingMode.PERM_NIGHT
     assert boiler.climate_zones["B"].permanent_derogation is True
@@ -227,9 +204,13 @@ async def test_isystem_derogation_bits_decode(mock_modbus_unit):
 @pytest.mark.parametrize("other_bits", [0x00, 0x10, 0x40, 0x50, 0x80, 0xFFD0])
 @pytest.mark.asyncio
 async def test_permanent_derogation_uses_only_known_heating_modes(
-    mock_modbus_unit, mode, expected, other_bits
+    mock_modbus_unit: MockModbusUnit,
+    mode: int,
+    expected: bool | None,
+    other_bits: int,
+    isystem_gtw26: Gtw26Factory,
 ):
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     for circuit, address in (
         (boiler.climate_zones["A"], 653),
         (boiler.climate_zones["B"], 659),
@@ -245,30 +226,31 @@ async def test_permanent_derogation_uses_only_known_heating_modes(
 
 
 @pytest.mark.asyncio
-async def test_isystem_config_and_diagnostics_decode(mock_modbus_unit):
+async def test_isystem_config_and_diagnostics_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    mock_modbus_unit.holding.update(
-        {
-            263: 5,
-            266: 120,
-            276: 0x8010,
-            289: 350,
-            291: 150,
-            272: 2,
-            296: 1,
-            297: 2,
-            360: 5,
-            298: 300,
-            305: 5200,
-            473: 1,
-            644: 5,
-            712: 255,
-            744: 3,
-            745: 1,
-            746: 4,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.holding.update({
+        263: 5,
+        266: 120,
+        276: 0x8010,
+        289: 350,
+        291: 150,
+        272: 2,
+        296: 1,
+        297: 2,
+        360: 5,
+        298: 300,
+        305: 5200,
+        473: 1,
+        644: 5,
+        712: 255,
+        744: 3,
+        745: 1,
+        746: 4,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.settings.language is Language.SPANISH
     assert boiler.config.bandwidth == 12.0
@@ -290,10 +272,13 @@ async def test_isystem_config_and_diagnostics_decode(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_config_sentinels_decode_as_missing_values(mock_modbus_unit):
+async def test_isystem_config_sentinels_decode_as_missing_values(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({282: 101, 289: 150})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.async_update()
 
@@ -302,18 +287,19 @@ async def test_isystem_config_sentinels_decode_as_missing_values(mock_modbus_uni
 
 
 @pytest.mark.asyncio
-async def test_isystem_unknown_fault_and_diagnostics_values_stay_raw(mock_modbus_unit):
+async def test_isystem_unknown_fault_and_diagnostics_values_stay_raw(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    mock_modbus_unit.holding.update(
-        {
-            465: 0x7777,
-            641: 0x07,
-            644: 0xFFFF,
-            710: 0x8CCC,
-            712: 0x1234,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.holding.update({
+        465: 0x7777,
+        641: 0x07,
+        644: 0xFFFF,
+        710: 0x8CCC,
+        712: 0x1234,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.async_update()
 
@@ -325,9 +311,12 @@ async def test_isystem_unknown_fault_and_diagnostics_values_stay_raw(mock_modbus
 
 
 @pytest.mark.asyncio
-async def test_isystem_outputs_decode_documented_secondary_bits(mock_modbus_unit):
+async def test_isystem_outputs_decode_documented_secondary_bits(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding.update({474: 0x8000, 475: 0x2001, 735: 0x4000})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.async_update()
 
@@ -340,10 +329,13 @@ async def test_isystem_outputs_decode_documented_secondary_bits(mock_modbus_unit
 
 
 @pytest.mark.asyncio
-async def test_isystem_dhw_priority_decodes(mock_modbus_unit):
+async def test_isystem_dhw_priority_decodes(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({674: 1})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.diagnostics.dhw_priority is HotWaterPriority.SLIDING
     mock_modbus_unit.holding.update({674: 9})
@@ -356,18 +348,26 @@ async def test_isystem_dhw_priority_decodes(mock_modbus_unit):
     [(0x08, False), (0x24, True), (0x04, False), (0x01, None)],
 )
 @pytest.mark.asyncio
-async def test_isystem_derogation_until_end_decodes(mock_modbus_unit, raw, expected):
-    boiler = isystem_gtw26(mock_modbus_unit)
+async def test_isystem_derogation_until_end_decodes(
+    mock_modbus_unit: MockModbusUnit,
+    raw: int,
+    expected: bool | None,
+    isystem_gtw26: Gtw26Factory,
+):
+    boiler = await isystem_gtw26(mock_modbus_unit)
     mock_modbus_unit.holding[659] = raw
     await boiler.climate_zones["B"].async_update()
     assert boiler.climate_zones["B"].derogation_until_end is expected
 
 
 @pytest.mark.asyncio
-async def test_isystem_active_mode_decodes(mock_modbus_unit):
+async def test_isystem_active_mode_decodes(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({637: 0, 638: 4, 639: 4, 640: 2, 641: 0})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.climate_zones["A"].active_mode is ActiveMode.ANTIFREEZE
     assert boiler.climate_zones["B"].active_mode is ActiveMode.DAY
@@ -377,9 +377,12 @@ async def test_isystem_active_mode_decodes(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_circuit_presence_follows_room_temp(mock_modbus_unit):
+async def test_isystem_circuit_presence_follows_room_temp(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.zone_a_present is True
     assert boiler.zone_b_present is False
@@ -387,22 +390,28 @@ async def test_isystem_circuit_presence_follows_room_temp(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_force_circuit_c_overrides_absent_sensor(mock_modbus_unit: MockModbusUnit):
+async def test_isystem_force_circuit_c_overrides_absent_sensor(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({618: 0xFFFF, 619: 0xFFFF})
-    unforced = isystem_gtw26(mock_modbus_unit)
+    unforced = await isystem_gtw26(mock_modbus_unit)
     await unforced.async_update()
     assert unforced.zone_c_present is False
 
-    forced = isystem_gtw26(mock_modbus_unit, force_circuit_c=True)
+    forced = await isystem_gtw26(mock_modbus_unit, force_circuit_c=True)
     await forced.async_update()
     assert forced.zone_c_present is True
 
 
 @pytest.mark.asyncio
-async def test_isystem_hot_water_presence_follows_temperature(mock_modbus_unit):
+async def test_isystem_hot_water_presence_follows_temperature(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.hot_water_present is True
 
@@ -412,18 +421,24 @@ async def test_isystem_hot_water_presence_follows_temperature(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_hot_water_zero_temperature_counts_as_present(mock_modbus_unit):
+async def test_isystem_hot_water_zero_temperature_counts_as_present(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[603] = 0
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.hot_water_present is True
 
 
 @pytest.mark.asyncio
-async def test_isystem_heating_mode_writes_to_zone_b_register(mock_modbus_unit):
+async def test_isystem_heating_mode_writes_to_zone_b_register(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding[659] = 0x58
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_set_heating_mode("B", HeatingMode.TEMP_NIGHT)
     word = mock_modbus_unit.holding[659]
     assert word & 0x2F == int(HeatingMode.TEMP_NIGHT)
@@ -433,9 +448,12 @@ async def test_isystem_heating_mode_writes_to_zone_b_register(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_hot_water_mode_writes_to_zone_b_register(mock_modbus_unit):
+async def test_isystem_hot_water_mode_writes_to_zone_b_register(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding[659] = 0x08
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_set_hot_water_mode(HotWaterMode.PERM)
     word = mock_modbus_unit.holding[659]
     assert word & 0x50 == int(HotWaterMode.PERM)
@@ -443,47 +461,57 @@ async def test_isystem_hot_water_mode_writes_to_zone_b_register(mock_modbus_unit
 
 
 @pytest.mark.asyncio
-async def test_isystem_circuit_c_mode_writes_to_667(mock_modbus_unit):
+async def test_isystem_circuit_c_mode_writes_to_667(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding[667] = 0x08
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_set_heating_mode("C", HeatingMode.TEMP_DAY)
     assert mock_modbus_unit.holding[667] & 0x2F == int(HeatingMode.TEMP_DAY)
 
 
 @pytest.mark.asyncio
-async def test_isystem_mode_write_does_not_nudge_panel(mock_modbus_unit):
-    boiler = isystem_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
+async def test_isystem_mode_write_does_not_nudge_panel(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
+    boiler = await isystem_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
     await boiler.async_set_heating_mode("B", HeatingMode.AUTO)
     assert 13 not in mock_modbus_unit.holding
 
 
 @pytest.mark.asyncio
-async def test_isystem_setpoint_snaps_and_writes(mock_modbus_unit):
-    boiler = isystem_gtw26(mock_modbus_unit)
+async def test_isystem_setpoint_snaps_and_writes(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.climate_zones["A"].write("comfort_target", 20.3)
     assert mock_modbus_unit.holding[650] == 205
 
 
 @pytest.mark.asyncio
-async def test_isystem_schedule_decodes_comfort_ranges(mock_modbus_unit):
-    mock_modbus_unit.holding.update(
-        {
-            126: 0x000F,
-            127: 0x8000,
-            128: 0,
-            131: 0x000F,
-            147: 0x0003,
-            148: 0xFFFF,
-            149: 0xFF00,
-            189: 0x03FF,
-            190: 0xC180,
-            191: 0xFFF8,
-            210: 0x000F,
-            211: 0xFFFF,
-            212: 0xFFF0,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+async def test_isystem_schedule_decodes_comfort_ranges(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
+    mock_modbus_unit.holding.update({
+        126: 0x000F,
+        127: 0x8000,
+        128: 0,
+        131: 0x000F,
+        147: 0x0003,
+        148: 0xFFFF,
+        149: 0xFF00,
+        189: 0x03FF,
+        190: 0xC180,
+        191: 0xFFF8,
+        210: 0x000F,
+        211: 0xFFFF,
+        212: 0xFFF0,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     week = boiler.schedule.get_week("circuit_a_p4")
     assert week[Weekday.MONDAY] == [ComfortPeriod(time(6, 0), time(8, 30))]
@@ -505,18 +533,21 @@ async def test_isystem_schedule_decodes_comfort_ranges(mock_modbus_unit):
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
 @pytest.mark.asyncio
-async def test_isystem_schedule_decodes_all_on_and_all_off_days(mock_modbus_unit, schedule, base):
-    mock_modbus_unit.holding.update(
-        {
-            base: 0xFFFF,
-            base + 1: 0xFFFF,
-            base + 2: 0xFFFF,
-            base + 3: 0,
-            base + 4: 0,
-            base + 5: 0,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+async def test_isystem_schedule_decodes_all_on_and_all_off_days(
+    mock_modbus_unit: MockModbusUnit,
+    schedule: str,
+    base: int,
+    isystem_gtw26: Gtw26Factory,
+):
+    mock_modbus_unit.holding.update({
+        base: 0xFFFF,
+        base + 1: 0xFFFF,
+        base + 2: 0xFFFF,
+        base + 3: 0,
+        base + 4: 0,
+        base + 5: 0,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.schedule.async_update(schedule)
 
@@ -529,26 +560,29 @@ async def test_isystem_schedule_decodes_all_on_and_all_off_days(mock_modbus_unit
         Weekday.SATURDAY: [],
         Weekday.SUNDAY: [],
     }
-    assert boiler.schedule.get_day(schedule, Weekday.MONDAY) == [ComfortPeriod(time(0, 0), time(0, 0))]
+    assert boiler.schedule.get_day(schedule, Weekday.MONDAY) == [
+        ComfortPeriod(time(0, 0), time(0, 0))
+    ]
     assert boiler.schedule.get_day(schedule, Weekday.TUESDAY) == []
 
 
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
 @pytest.mark.asyncio
 async def test_isystem_schedule_decodes_adjacent_days_independently(
-    mock_modbus_unit, schedule, base
+    mock_modbus_unit: MockModbusUnit,
+    schedule: str,
+    base: int,
+    isystem_gtw26: Gtw26Factory,
 ):
-    mock_modbus_unit.holding.update(
-        {
-            base: 0x8000,
-            base + 1: 0,
-            base + 2: 0,
-            base + 3: 0x4000,
-            base + 4: 0,
-            base + 5: 0,
-        }
-    )
-    boiler = isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.holding.update({
+        base: 0x8000,
+        base + 1: 0,
+        base + 2: 0,
+        base + 3: 0x4000,
+        base + 4: 0,
+        base + 5: 0,
+    })
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.schedule.async_update(schedule)
 
@@ -559,9 +593,12 @@ async def test_isystem_schedule_decodes_adjacent_days_independently(
 
 
 @pytest.mark.asyncio
-async def test_isystem_schedule_reads_one_day_per_request(mock_modbus_unit):
+async def test_isystem_schedule_reads_one_day_per_request(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
 
     blocks = [
@@ -574,9 +611,12 @@ async def test_isystem_schedule_reads_one_day_per_request(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_set_day_refreshes_cached_schedule(mock_modbus_unit):
+async def test_isystem_set_day_refreshes_cached_schedule(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding.update({147: 0x0000, 148: 0xC000, 149: 0x0000})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.schedule.get_week("circuit_b_p4")[Weekday.MONDAY] == [
         ComfortPeriod(time(8, 0), time(9, 0))
@@ -594,10 +634,11 @@ async def test_isystem_set_day_refreshes_cached_schedule(mock_modbus_unit):
 
 @pytest.mark.asyncio
 async def test_isystem_pooled_and_read_once_reads_stay_inside_windows(
-    mock_modbus_unit,
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
 ):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
 
     schedule_days = {(base + 3 * day, 3) for base in SCHEDULE_BASES.values() for day in range(7)}
@@ -616,9 +657,12 @@ async def test_isystem_pooled_and_read_once_reads_stay_inside_windows(
 
 
 @pytest.mark.asyncio
-async def test_isystem_each_window_read_without_crossing_gaps(mock_modbus_unit):
+async def test_isystem_each_window_read_without_crossing_gaps(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
 
     schedule_days = {(base + 3 * day, 3) for base in SCHEDULE_BASES.values() for day in range(7)}
@@ -646,9 +690,12 @@ async def test_isystem_each_window_read_without_crossing_gaps(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
+async def test_isystem_pooled_blocks_respect_gtw26_max_span(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.async_update()
 
@@ -659,6 +706,22 @@ async def test_isystem_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
     ]
     assert blocks
     assert all(count <= GTW26_MAX_SPAN for _, count in blocks)
+
+
+@pytest.mark.asyncio
+async def test_isystem_poll_read_count_is_pinned(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
+    # Pins the per-poll traffic budget: a regression splitting the pool into per-bundle reads must update this count.
+    _seed(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
+    mock_modbus_unit.read_events.clear()
+
+    report = await boiler.async_update()
+
+    assert report.complete
+    assert len(mock_modbus_unit.read_events) == 56
 
 
 _ISYSTEM_READINGS_BUNDLES = {
@@ -703,12 +766,17 @@ _ISYSTEM_SETTINGS_BUNDLES = {"settings", "identity", "config"} | {
 )
 @pytest.mark.asyncio
 async def test_isystem_update_scope_polls_only_its_own_bundles(
-    mock_modbus_unit, update, expected_updated, reads_live, reads_config
+    mock_modbus_unit: MockModbusUnit,
+    update: Callable[[GTW26], Awaitable[UpdateReport]],
+    expected_updated: set[str],
+    reads_live: bool,
+    reads_config: bool,
+    isystem_gtw26: Gtw26Factory,
 ):
     # Pooled blocks bridge gaps inside a declared window, so a poll physically
     # touches foreign addresses; the split is asserted on the decoded values.
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     mock_modbus_unit.read_events.clear()
 
     report = await update(boiler)
@@ -723,10 +791,13 @@ async def test_isystem_update_scope_polls_only_its_own_bundles(
 
 
 @pytest.mark.asyncio
-async def test_isystem_runtime_boiler_values_refresh_every_poll(mock_modbus_unit):
+async def test_isystem_runtime_boiler_values_refresh_every_poll(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({305: 5200, 436: 550, 438: 60, 473: 42})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     await boiler.async_update()
     assert boiler.sensors.max_fan_speed == 5200
@@ -743,9 +814,12 @@ async def test_isystem_runtime_boiler_values_refresh_every_poll(mock_modbus_unit
 
 
 @pytest.mark.asyncio
-async def test_isystem_group_planning_uses_declared_windows(mock_modbus_unit):
+async def test_isystem_group_planning_uses_declared_windows(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     for component in (
         boiler.sensors,
         boiler.hot_water,
@@ -767,9 +841,12 @@ async def test_isystem_group_planning_uses_declared_windows(mock_modbus_unit):
 @pytest.mark.parametrize("schedule, base", SCHEDULE_BASES.items())
 @pytest.mark.asyncio
 async def test_isystem_schedule_reads_all_days_as_three_register_blocks(
-    mock_modbus_unit, schedule, base
+    mock_modbus_unit: MockModbusUnit,
+    schedule: str,
+    base: int,
+    isystem_gtw26: Gtw26Factory,
 ):
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     mock_modbus_unit.read_events.clear()
 
     await boiler.schedule.async_update(schedule)
@@ -780,9 +857,12 @@ async def test_isystem_schedule_reads_all_days_as_three_register_blocks(
 
 
 @pytest.mark.asyncio
-async def test_isystem_decodes_selected_program(mock_modbus_unit):
+async def test_isystem_decodes_selected_program(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     mock_modbus_unit.holding.update({231: 0x2000, 232: 0x2023, 233: 0x2038})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.climate_zones["A"].program == 1
     assert boiler.climate_zones["B"].program == 2
@@ -796,12 +876,15 @@ async def test_isystem_decodes_selected_program(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_read_raw_covers_schedule_blocks(mock_modbus_unit):
+async def test_isystem_read_raw_covers_schedule_blocks(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     expected = {231: 0x2000, 232: 0x2023, 233: 0x2038}
     for base in SCHEDULE_BASES.values():
         expected.update({base + offset: base + offset for offset in range(21)})
     mock_modbus_unit.holding.update(expected)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
 
     raw = await boiler.async_read_all_raw()
 
@@ -809,9 +892,12 @@ async def test_isystem_read_raw_covers_schedule_blocks(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_read_raw_refreshes_decoded_cache(mock_modbus_unit):
+async def test_isystem_read_raw_refreshes_decoded_cache(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     assert boiler.sensors.boiler_temperature is None
 
     await boiler.async_read_all_raw()
@@ -820,10 +906,13 @@ async def test_isystem_read_raw_refreshes_decoded_cache(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_counters_and_outdoor_settings_decode(mock_modbus_unit):
+async def test_isystem_counters_and_outdoor_settings_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({9: 0x8032, 61: 2, 102: 196, 251: 0x2B30, 252: 0x7272})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.sensors.burner_start_count == 44224
     assert boiler.sensors.burner_runtime_hours == 29298
@@ -833,20 +922,26 @@ async def test_isystem_counters_and_outdoor_settings_decode(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_isystem_absent_counters_decode_as_none(mock_modbus_unit):
+async def test_isystem_absent_counters_decode_as_none(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({251: 0xFFFF, 252: 0xFFFF})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.sensors.burner_start_count is None
     assert boiler.sensors.burner_runtime_hours is None
 
 
 @pytest.mark.asyncio
-async def test_isystem_output_bits_and_secondary_setpoint_decode(mock_modbus_unit):
+async def test_isystem_output_bits_and_secondary_setpoint_decode(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({474: 0x0019, 734: 0x01CC, 735: 0x0008, 10: 1})
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.outputs.burner_stage_1_active is True
     assert boiler.outputs.hydraulic_valve_closing is True
@@ -857,9 +952,12 @@ async def test_isystem_output_bits_and_secondary_setpoint_decode(mock_modbus_uni
 
 
 @pytest.mark.asyncio
-async def test_isystem_auxiliary_input_decodes(mock_modbus_unit):
+async def test_isystem_auxiliary_input_decodes(
+    mock_modbus_unit: MockModbusUnit,
+    isystem_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[741] = 0
-    boiler = isystem_gtw26(mock_modbus_unit)
+    boiler = await isystem_gtw26(mock_modbus_unit)
     await boiler.async_update()
     assert boiler.diagnostics.auxiliary_1_input is AuxiliaryInput.DISABLED

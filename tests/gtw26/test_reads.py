@@ -1,95 +1,62 @@
-import pytest
+from collections.abc import Awaitable, Callable
+
 import pytest
 from modbus_connection.mock import MockModbusUnit
+from modbus_connection.model import UpdateReport
 
 from aio_remeha_modbus.gtw26 import GTW26, HeatingMode, HotWaterMode, HotWaterPriority
 from aio_remeha_modbus.gtw26.const import (
     BASE_WINDOWS,
     GTW26_MAX_SPAN,
-    ControllerGeneration,
     RegisterLayout,
 )
+from tests.gtw26.conftest import Gtw26Factory
 
 
 def _seed(unit: MockModbusUnit) -> None:
-    unit.holding.update(
-        {
-            3: 400,
-            4: 14,
-            5: 30,
-            7: 205,
-            102: 175,
-            14: 550,
-            17: 0x58,
-            18: 210,
-            27: 0xFFFF,
-            30: 0xFFFF,
-            31: 0xFFFF,
-            32: 0xFFFF,
-            33: 0xFFFF,
-            59: 550,
-            60: 0,
-            62: 500,
-            75: 650,
-            110: 25,
-            427: 0x38,
-            453: 0xFFFF,
-            455: 3000,
-            456: 15,
-            457: 3,
-            459: 505,
-            462: 700,
-            463: 42,
-            465: 0xFFFF,
-            116: 0x0005,
-            121: 800,
-            467: 0x8000 | 120,
-            470: 195,
-            471: 250,
-        }
-    )
-
-
-def base_gtw26(
-    unit, *, variant=ControllerGeneration.GENERATION_3, force_circuit_a=False, force_circuit_b=False
-):
-    device = GTW26(
-        "test",
-        unit,
-        layout=RegisterLayout.BASE,
-        generation=variant,
-        force_zone_a=force_circuit_a,
-        force_zone_b=force_circuit_b,
-    )
-    device._setup_bundles(RegisterLayout.BASE, variant)
-    return device
-
-
-def isystem_gtw26(
-    unit,
-    *,
-    variant=ControllerGeneration.GENERATION_4,
-    force_circuit_a=False,
-    force_circuit_b=False,
-    force_circuit_c=False,
-):
-    device = GTW26(
-        "test",
-        unit,
-        layout=RegisterLayout.ISYSTEM,
-        generation=variant,
-        force_zone_a=force_circuit_a,
-        force_zone_b=force_circuit_b,
-        force_zone_c=force_circuit_c,
-    )
-    device._setup_bundles(RegisterLayout.ISYSTEM, variant)
-    return device
+    unit.holding.update({
+        3: 400,
+        4: 14,
+        5: 30,
+        7: 205,
+        102: 175,
+        14: 550,
+        17: 0x58,
+        18: 210,
+        27: 0xFFFF,
+        30: 0xFFFF,
+        31: 0xFFFF,
+        32: 0xFFFF,
+        33: 0xFFFF,
+        59: 550,
+        60: 0,
+        62: 500,
+        75: 650,
+        110: 25,
+        427: 0x38,
+        453: 0xFFFF,
+        455: 3000,
+        456: 15,
+        457: 3,
+        459: 505,
+        462: 700,
+        463: 42,
+        465: 0xFFFF,
+        116: 0x0005,
+        121: 800,
+        467: 0x8000 | 120,
+        470: 195,
+        471: 250,
+    })
 
 
 @pytest.mark.asyncio
-async def test_reads_decode_across_bundles(mock_modbus_unit):
+async def test_reads_decode_across_bundles(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
 
     assert diematic.sensors.outdoor_temperature == 20.5
@@ -126,9 +93,12 @@ async def test_reads_decode_across_bundles(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_base_pooled_reads_stay_inside_windows(mock_modbus_unit):
+async def test_base_pooled_reads_stay_inside_windows(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
 
     await diematic.async_update()
 
@@ -156,9 +126,12 @@ async def test_base_pooled_reads_stay_inside_windows(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_base_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
+async def test_base_pooled_blocks_respect_gtw26_max_span(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
 
     await diematic.async_update()
 
@@ -169,6 +142,22 @@ async def test_base_pooled_blocks_respect_gtw26_max_span(mock_modbus_unit):
     ]
     assert blocks
     assert all(count <= GTW26_MAX_SPAN for _, count in blocks)
+
+
+@pytest.mark.asyncio
+async def test_base_poll_read_count_is_pinned(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
+    # Pins the per-poll traffic budget: a regression splitting the pool into per-bundle reads must update this count.
+    _seed(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
+    mock_modbus_unit.read_events.clear()
+
+    report = await diematic.async_update()
+
+    assert report.complete
+    assert len(mock_modbus_unit.read_events) == 8
 
 
 _BASE_READINGS_BUNDLES = {
@@ -210,12 +199,17 @@ _BASE_SETTINGS_BUNDLES = {"settings", "identity"}
 )
 @pytest.mark.asyncio
 async def test_base_update_scope_polls_only_its_own_bundles(
-    mock_modbus_unit, update, expected_updated, reads_live, reads_config
+    mock_modbus_unit: MockModbusUnit,
+    update: Callable[[GTW26], Awaitable[UpdateReport]],
+    expected_updated: set[str],
+    reads_live: bool,
+    reads_config: bool,
+    base_gtw26: Gtw26Factory,
 ):
     # Pooled blocks bridge gaps inside a declared window, so a poll physically
     # touches foreign addresses; the split is asserted on the decoded values.
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     mock_modbus_unit.read_events.clear()
 
     report = await update(diematic)
@@ -238,10 +232,15 @@ async def test_base_update_scope_polls_only_its_own_bundles(
     ],
 )
 @pytest.mark.asyncio
-async def test_base_hot_water_priority_decodes_low_byte(mock_modbus_unit, raw, expected):
+async def test_base_hot_water_priority_decodes_low_byte(
+    mock_modbus_unit: MockModbusUnit,
+    raw: int,
+    expected: HotWaterPriority | int,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[60] = raw
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
 
     await diematic.async_update()
 
@@ -249,10 +248,10 @@ async def test_base_hot_water_priority_decodes_low_byte(mock_modbus_unit, raw, e
 
 
 @pytest.mark.asyncio
-async def test_fork_registers_decode(mock_modbus_unit):
+async def test_fork_registers_decode(mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding.update({9: 0x8032, 19: 3, 28: 3, 30: 100, 31: 420, 33: 246})
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.settings.frost_threshold == -5.0
     assert diematic.climate_zones["A"].ambient_influence == 3
@@ -263,10 +262,13 @@ async def test_fork_registers_decode(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_boiler_type_decodes_controller_name(mock_modbus_unit):
+async def test_boiler_type_decodes_controller_name(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[457] = 24
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.identity.controller_type == "D4"
     mock_modbus_unit.holding[457] = 999
@@ -275,39 +277,51 @@ async def test_boiler_type_decodes_controller_name(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_known_alarm_code_decodes_to_label(mock_modbus_unit):
+async def test_known_alarm_code_decodes_to_label(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[465] = 0x100D
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.sensors.fault == "DEF.ALLUMAGE 14"
 
 
 @pytest.mark.asyncio
-async def test_unknown_alarm_code_surfaces_as_raw_int(mock_modbus_unit):
+async def test_unknown_alarm_code_surfaces_as_raw_int(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[465] = 0x7777
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.sensors.fault == 0x7777
 
 
 @pytest.mark.asyncio
-async def test_absent_integer_sensors_read_none(mock_modbus_unit):
+async def test_absent_integer_sensors_read_none(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[463] = 0xFFFF
     mock_modbus_unit.holding[455] = 0xFFFF
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.sensors.pump_power is None
     assert diematic.sensors.fan_speed is None
 
 
 @pytest.mark.asyncio
-async def test_smoke_temp_out_of_range_reads_none(mock_modbus_unit):
+async def test_smoke_temp_out_of_range_reads_none(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[454] = 0x8CCC
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.sensors.flue_gas_temperature is None
     mock_modbus_unit.holding[454] = 800
@@ -316,26 +330,32 @@ async def test_smoke_temp_out_of_range_reads_none(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_dpsm_boiler_temp_decodes(mock_modbus_unit):
+async def test_dpsm_boiler_temp_decodes(mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory):
     mock_modbus_unit.holding[452] = 281
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.sensors.boiler_temperature_dpsm == 28.1
 
 
 @pytest.mark.asyncio
-async def test_circuit_presence_follows_room_temp(mock_modbus_unit):
+async def test_circuit_presence_follows_room_temp(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.zone_a_present is True
     assert diematic.zone_b_present is False
 
 
 @pytest.mark.asyncio
-async def test_hot_water_presence_follows_temperature(mock_modbus_unit):
+async def test_hot_water_presence_follows_temperature(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.hot_water_present is True
 
@@ -350,19 +370,25 @@ async def test_hot_water_presence_follows_temperature(mock_modbus_unit):
 
 
 @pytest.mark.asyncio
-async def test_hot_water_zero_temperature_counts_as_present(mock_modbus_unit):
+async def test_hot_water_zero_temperature_counts_as_present(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
     mock_modbus_unit.holding[62] = 0
     mock_modbus_unit.holding[459] = 0xFFFF
-    diematic = base_gtw26(mock_modbus_unit)
+    diematic = await base_gtw26(mock_modbus_unit)
     await diematic.async_update()
     assert diematic.hot_water_present is True
 
 
 @pytest.mark.asyncio
-async def test_force_circuit_b_overrides_absent_sensor(mock_modbus_unit):
+async def test_force_circuit_b_overrides_absent_sensor(
+    mock_modbus_unit: MockModbusUnit,
+    base_gtw26: Gtw26Factory,
+):
     _seed(mock_modbus_unit)
-    diematic = base_gtw26(mock_modbus_unit, force_circuit_b=True)
+    diematic = await base_gtw26(mock_modbus_unit, force_circuit_b=True)
     await diematic.async_update()
     assert diematic.zone_b_present is True
 

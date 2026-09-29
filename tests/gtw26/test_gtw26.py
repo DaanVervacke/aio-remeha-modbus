@@ -1,112 +1,101 @@
 """GTW26 facade tests."""
 
-import struct
-from datetime import datetime
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from modbus_connection import ModbusConnectionError, ModbusError, ModbusUnit
+from modbus_connection import ModbusConnectionError
 from modbus_connection.exceptions import IllegalDataAddressError
-from modbus_connection.mock import MockModbusUnit
+from modbus_connection.mock import MockModbusUnit, WriteEvent
 
 from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.gtw26 import GTW26, DetectionFailureReason, HeatingMode, HotWaterMode
 from aio_remeha_modbus.gtw26.const import (
-    SCHEDULE_BASES,
     ControllerGeneration,
     RegisterLayout,
 )
 from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
-from aio_remeha_modbus.gtw26.system_discovery_table import (
-    GTW26Detection,
-    async_detect,
-)
 
 
 def _seed(unit: MockModbusUnit) -> None:
     """Seed a mock unit with base layout data."""
-    unit.holding.update(
-        {
-            3: 400,
-            4: 14,
-            5: 30,
-            6: 2,
-            7: 205,
-            102: 175,
-            108: 10,
-            109: 9,
-            110: 25,
-            14: 550,
-            17: 0x58,
-            18: 210,
-            27: 0xFFFF,
-            30: 0xFFFF,
-            31: 0xFFFF,
-            32: 0xFFFF,
-            33: 0xFFFF,
-            59: 550,
-            60: 0,
-            62: 500,
-            75: 650,
-            116: 0x0005,
-            121: 800,
-            427: 0x38,
-            453: 0xFFFF,
-            455: 3000,
-            456: 15,
-            457: 24,  # Type code for Gen4
-            459: 505,
-            462: 700,
-            463: 42,
-            465: 0xFFFF,
-            467: 0x8000 | 120,
-            470: 195,
-            471: 250,
-        }
-    )
+    unit.holding.update({
+        3: 400,
+        4: 14,
+        5: 30,
+        6: 2,
+        7: 205,
+        102: 175,
+        108: 10,
+        109: 9,
+        110: 25,
+        14: 550,
+        17: 0x58,
+        18: 210,
+        27: 0xFFFF,
+        30: 0xFFFF,
+        31: 0xFFFF,
+        32: 0xFFFF,
+        33: 0xFFFF,
+        59: 550,
+        60: 0,
+        62: 500,
+        75: 650,
+        116: 0x0005,
+        121: 800,
+        427: 0x38,
+        453: 0xFFFF,
+        455: 3000,
+        456: 15,
+        457: 24,  # Type code for Gen4
+        459: 505,
+        462: 700,
+        463: 42,
+        465: 0xFFFF,
+        467: 0x8000 | 120,
+        470: 195,
+        471: 250,
+    })
 
 
 def _seed_isystem(unit: MockModbusUnit) -> None:
     """Seed a mock unit with iSystem layout data."""
-    unit.holding.update(
-        {
-            3: 400,
-            4: 14,
-            5: 30,
-            6: 2,
-            108: 10,
-            109: 9,
-            110: 25,
-            457: 24,  # Type code for Gen4
-            600: 412,
-            601: 205,
-            602: 650,
-            614: 210,
-            619: 215,
-            679: 12,
-            680: 30,
-            681: 2,
-            682: 10,
-            683: 9,
-            684: 25,
-            126: 0x0180,
-            231: 0x2000,
-            232: 0x2023,
-            233: 0x2038,
-            247: 0x0000,
-            659: 0x58,
-            640: 6,
-            641: 6,
-            653: 0x58,
-            661: 200,
-            662: 100,
-            663: 950,
-            669: 40,
-            670: 150,
-            671: 500,
-        }
-    )
+    unit.holding.update({
+        3: 400,
+        4: 14,
+        5: 30,
+        6: 2,
+        108: 10,
+        109: 9,
+        110: 25,
+        457: 24,  # Type code for Gen4
+        600: 412,
+        601: 205,
+        602: 650,
+        614: 210,
+        619: 215,
+        679: 12,
+        680: 30,
+        681: 2,
+        682: 10,
+        683: 9,
+        684: 25,
+        126: 0x0180,
+        231: 0x2000,
+        232: 0x2023,
+        233: 0x2038,
+        247: 0x0000,
+        659: 0x58,
+        640: 6,
+        641: 6,
+        653: 0x58,
+        661: 200,
+        662: 100,
+        663: 950,
+        669: 40,
+        670: 150,
+        671: 500,
+    })
 
 
 class TestAutoSetup:
@@ -196,9 +185,7 @@ class TestAutoSetup:
         """Test that detection constructs its device with the given spacing."""
         _seed_isystem(mock_modbus_unit)
 
-        detection = await GTW26.async_detect(
-            mock_modbus_unit, message_spacing_seconds=0.5
-        )
+        detection = await GTW26.async_detect(mock_modbus_unit, message_spacing_seconds=0.5)
 
         assert mock_modbus_unit.message_spacing == 0.5
         assert detection.device is not None
@@ -256,7 +243,10 @@ class TestAutoSetup:
     )
     @pytest.mark.asyncio
     async def test_base_setup_without_generation_raises_on_unmapped_type_code(
-        self, mock_modbus_unit: MockModbusUnit, type_code: int, failure_reason: DetectionFailureReason
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        type_code: int,
+        failure_reason: DetectionFailureReason,
     ) -> None:
         """Test that a base device whose type code names no generation fails setup."""
         _seed(mock_modbus_unit)
@@ -270,9 +260,7 @@ class TestAutoSetup:
         assert caught.value.detection.failure_reason is failure_reason
 
     @pytest.mark.asyncio
-    async def test_async_setup_only_detects_once(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    async def test_async_setup_only_detects_once(self, mock_modbus_unit: MockModbusUnit) -> None:
         """Test that _async_setup only calls detect once."""
         _seed(mock_modbus_unit)
         mock_modbus_unit.fail_read(600, IllegalDataAddressError())
@@ -326,8 +314,6 @@ class TestAutoSetup:
         with patch.object(
             device._unit, "read_holding_registers", wraps=device._unit.read_holding_registers
         ) as mock_read:
-            import asyncio
-
             await asyncio.gather(
                 device.async_ensure_setup(),
                 device.async_ensure_setup(),
@@ -335,8 +321,8 @@ class TestAutoSetup:
             )
             call_count = mock_read.call_count
 
-        # Should only read once even with concurrent calls
-        assert call_count > 0
+        # One detection only: three base identity blocks plus two iSystem identity blocks.
+        assert call_count == 5
 
 
 class TestProperties:
@@ -621,14 +607,92 @@ class TestProperties:
 
         assert device.hot_water_present is True
 
+    @pytest.mark.parametrize(
+        ("zone", "force_kwargs", "expected"),
+        [
+            pytest.param("A", {}, False, id="zone-a-unforced"),
+            pytest.param("A", {"force_zone_a": True}, True, id="zone-a-forced"),
+            pytest.param("B", {}, False, id="zone-b-unforced"),
+            pytest.param("B", {"force_zone_b": True}, True, id="zone-b-forced"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_zone_present_without_zone_component(
+        self,
+        mock_modbus_unit: MockModbusUnit,
+        zone: str,
+        force_kwargs: dict[str, bool],
+        expected: bool,
+    ) -> None:
+        """Test that a zone missing from climate_zones is present only when forced."""
+        device = GTW26(
+            "test",
+            mock_modbus_unit,
+            layout=RegisterLayout.BASE,
+            generation=ControllerGeneration.GENERATION_4,
+            **force_kwargs,
+        )
+        await device.async_ensure_setup()
+        device.climate_zones.pop(zone)
+
+        assert getattr(device, f"zone_{zone.lower()}_present") is expected
+
+    @pytest.mark.asyncio
+    async def test_zone_c_present_without_zone_component_isystem(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that zone_c_present is False when zone C is missing from climate_zones."""
+        device = GTW26(
+            "test",
+            mock_modbus_unit,
+            layout=RegisterLayout.ISYSTEM,
+            generation=ControllerGeneration.GENERATION_4,
+        )
+        await device.async_ensure_setup()
+        device.climate_zones.pop("C")
+
+        assert device.zone_c_present is False
+
+    @pytest.mark.asyncio
+    async def test_hot_water_present_without_hot_water_component(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that hot_water_present is False when the hot water component is None."""
+        device = GTW26(
+            "test",
+            mock_modbus_unit,
+            layout=RegisterLayout.BASE,
+            generation=ControllerGeneration.GENERATION_4,
+        )
+        await device.async_ensure_setup()
+        device.hot_water = None
+
+        assert device.hot_water_present is False
+
+
+class TestConstructor:
+    """Tests for constructor-applied unit requirements."""
+
+    def test_request_timeout_is_required_on_unit(self, mock_modbus_unit: MockModbusUnit) -> None:
+        """Test that request_timeout is forwarded to the unit."""
+        GTW26("test", mock_modbus_unit, request_timeout=3.0)
+
+        assert mock_modbus_unit.required_timeout == 3.0
+
+    def test_without_request_timeout_the_unit_keeps_its_own(
+        self, mock_modbus_unit: MockModbusUnit
+    ) -> None:
+        """Test that the constructor leaves the unit timeout unchanged by default."""
+        GTW26("test", mock_modbus_unit)
+
+        assert mock_modbus_unit.required_timeout is None
+
 
 class TestReadRegisters:
     """Tests for async_read_registers method."""
 
     @pytest.mark.asyncio
-    async def test_read_registers_single_register(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    async def test_read_registers_single_register(self, mock_modbus_unit: MockModbusUnit) -> None:
         """Test reading a single register."""
         _seed(mock_modbus_unit)
         device = GTW26(
@@ -752,12 +816,15 @@ class TestNudgePanel:
         )
         device._setup_complete = True
 
+        writes: list[WriteEvent] = []
+        mock_modbus_unit.on_write(writes.append)
+
         # Mock asyncio.sleep to avoid actual delay
         with patch("aio_remeha_modbus.gtw26.gtw26.asyncio.sleep", AsyncMock()):
             await device._nudge_panel()
 
-        # Should write 1, then 0 to PANEL_NUDGE_REGISTER (13)
-        assert mock_modbus_unit.holding[13] == 0
+        # The panel refresh is a 1-then-0 toggle on PANEL_NUDGE_REGISTER (13)
+        assert [(event.address, event.values) for event in writes] == [(13, [1]), (13, [0])]
 
     @pytest.mark.asyncio
     async def test_nudge_panel_called_after_heating_mode_write_gen4(
@@ -782,9 +849,7 @@ class TestNudgePanel:
         mock_nudge.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_nudge_panel_not_called_for_gen3(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    async def test_nudge_panel_not_called_for_gen3(self, mock_modbus_unit: MockModbusUnit) -> None:
         """Test that _nudge_panel is not called for Gen3."""
         _seed(mock_modbus_unit)
         mock_modbus_unit.fail_read(600, IllegalDataAddressError())
@@ -859,9 +924,7 @@ class TestErrorPaths:
         await GTW26.async_health_check(mock_modbus_unit)
 
     @pytest.mark.asyncio
-    async def test_health_check_raises_on_error(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    async def test_health_check_raises_on_error(self, mock_modbus_unit: MockModbusUnit) -> None:
         """Test that async_health_check raises RemehaModbusError on ModbusError."""
         mock_modbus_unit.fail_read(457, IllegalDataAddressError())
 

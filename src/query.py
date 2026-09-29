@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import sys
 from datetime import time
 
 from dateutil.tz import gettz
@@ -51,6 +52,38 @@ def _parse_zones(parser: argparse.ArgumentParser, args: argparse.Namespace) -> N
             parser.error(f"invalid --zone {index}: a gtw08 zone is a one-based index")
         zones.append(index)
     args.zone = zones
+
+
+# Flags only the named gateway reads, mirroring the two add_argument_group blocks.
+_GTW08_ONLY_FLAGS: tuple[tuple[str, str], ...] = (
+    ("mcm", "--mcm"),
+    ("appliance", "--appliance"),
+)
+_GTW26_ONLY_FLAGS: tuple[tuple[str, str], ...] = (
+    ("sensors", "--sensors"),
+    ("hot_water", "--hot-water"),
+    ("settings", "--settings"),
+    ("config", "--config"),
+    ("outputs", "--outputs"),
+    ("service", "--service"),
+    ("diagnostics", "--diagnostics"),
+    ("schedules", "--schedules"),
+    ("layout", "--layout"),
+)
+
+
+def _warn_foreign_flags(args: argparse.Namespace) -> None:
+    """Warn on stderr about set flags the selected gateway does not support.
+
+    Scripts may pass flags broadly, so a foreign flag is ignored, not rejected.
+    """
+    foreign = _GTW08_ONLY_FLAGS if args.gateway == "gtw26" else _GTW26_ONLY_FLAGS
+    for attr, option in foreign:
+        if getattr(args, attr):
+            print(  # noqa: T201
+                f"ignoring {option}: not supported by gateway {args.gateway}",
+                file=sys.stderr,
+            )
 
 
 def _print_probe_evidence(detection: GTW26Detection) -> None:
@@ -377,6 +410,7 @@ async def main() -> int:  # noqa: D103
 
     args = parser.parse_args()
     _parse_zones(parser, args)
+    _warn_foreign_flags(args)
 
     try:
         conn = await connect_from_args(args)
@@ -404,4 +438,5 @@ async def main() -> int:  # noqa: D103
     return exit_code
 
 
-raise SystemExit(asyncio.run(main()))
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))
