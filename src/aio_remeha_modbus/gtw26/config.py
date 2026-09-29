@@ -1,7 +1,6 @@
 """GTW26 configuration, output and service register components."""
 
 from collections.abc import Callable
-from typing import Self
 
 from modbus_connection.model import bit, integer
 
@@ -118,7 +117,7 @@ class Config(Gtw26Component):
     """Installer settings and output values cached after their first read."""
 
     register_ranges = ISYSTEM_WINDOWS
-    _on_written: Callable[[Self], None] | None = None
+    _on_written: Callable[[Gtw26Component], None] | None = None
 
     async def write(self, field: str, value: object) -> None:
         """Write a config field and notify the facade to reread it."""

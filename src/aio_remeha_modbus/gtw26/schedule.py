@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import time
 from itertools import starmap
-from typing import Any, ClassVar, Self, override
+from typing import Any, ClassVar, override
 
 from modbus_connection import ModbusUnit
 from modbus_connection.model import RegisterField
@@ -65,7 +65,7 @@ class WeekProgram(Gtw26Component):
     register_ranges = tuple(
         (day * DAY_STRIDE, day * DAY_STRIDE + DAY_STRIDE - 1) for day in range(DAYS)
     )
-    _on_day_written: Callable[[Self], None] | None = None
+    _on_day_written: Callable[[Gtw26Component], None] | None = None
 
     monday = schedule_day(0, writable=True)
     tuesday = schedule_day(DAY_STRIDE, writable=True)

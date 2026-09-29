@@ -63,14 +63,14 @@ from aio_remeha_modbus.gtw26.system_discovery_table import (
 )
 from aio_remeha_modbus.helpers.fields import decode_bytes
 
-_BASE_READ_ONCE = frozenset()
+_BASE_READ_ONCE: Final[frozenset[str]] = frozenset()
 _ISYSTEM_READ_ONCE = frozenset(f"schedules.{name}" for name in SCHEDULE_BASES) | {"config"}
 
 # Bundle-name split per layout, mirroring the GTW08 READINGS/SETTINGS contract:
 # readings are the live values, settings the rarely-changing configuration.
 # Read-once bundles (config, schedules) belong to the settings semantics and
 # are polled through `_pending_once`, not through the settings pool.
-_BASE_READINGS: Final = (
+_BASE_READINGS: Final[tuple[str, ...]] = (
     "sensors",
     "hot_water",
     "climate_zone_a",
@@ -78,8 +78,8 @@ _BASE_READINGS: Final = (
     "outputs",
     "service",
 )
-_BASE_SETTINGS: Final = ("settings", "identity")
-_ISYSTEM_READINGS: Final = (
+_BASE_SETTINGS: Final[tuple[str, ...]] = ("settings", "identity")
+_ISYSTEM_READINGS: Final[tuple[str, ...]] = (
     "sensors",
     "hot_water",
     "climate_zone_a",
@@ -88,7 +88,7 @@ _ISYSTEM_READINGS: Final = (
     "outputs",
     "diagnostics",
 )
-_ISYSTEM_SETTINGS: Final = ("settings", "identity")
+_ISYSTEM_SETTINGS: Final[tuple[str, ...]] = ("settings", "identity")
 
 __all__ = ["GTW26", "async_detect", "async_probe"]
 
@@ -296,7 +296,10 @@ class GTW26(Device):
         """Construct the base-layout components and register bundles."""
         self.sensors = Sensors(self._unit)
         self.hot_water = HotWater(self._unit)
-        zones = {"A": ClimateZoneA(self._unit), "B": ClimateZoneB(self._unit)}
+        zones: dict[str, ClimateZone | ISystemClimateZone] = {
+            "A": ClimateZoneA(self._unit),
+            "B": ClimateZoneB(self._unit),
+        }
         for designation, zone in zones.items():
             zone.designation = designation
         self.climate_zones = zones
@@ -322,7 +325,7 @@ class GTW26(Device):
         """Construct the iSystem-layout components and register bundles."""
         self.sensors = ISystemSensors(self._unit)
         self.hot_water = ISystemHotWater(self._unit)
-        zones = {
+        zones: dict[str, ClimateZone | ISystemClimateZone] = {
             "A": ISystemClimateZoneA(self._unit),
             "B": ISystemClimateZoneB(self._unit),
             "C": ISystemClimateZoneC(self._unit),
