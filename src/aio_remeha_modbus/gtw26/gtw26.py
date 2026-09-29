@@ -45,6 +45,7 @@ from aio_remeha_modbus.gtw26.const import (
     ControllerGeneration,
     HeatingMode,
     HotWaterMode,
+    LayoutPolicy,
     RegisterLayout,
 )
 from aio_remeha_modbus.gtw26.errors import GTW26ProbeError
@@ -448,11 +449,10 @@ class GTW26(Device):
     def _invalidate_read_once(self, component: Component) -> None:
         """Re-arm a cached bundle after a successful write."""
         name = next((name for name, item in self._bundles.items() if item is component), None)
-        if (name is not None and name.startswith("schedules.")) or name == "config":
-            if name is not None:
-                self._pending_once[name] = self._bundles[name]
+        if name is not None and (name.startswith("schedules.") or name == "config"):
+            self._pending_once[name] = self._bundles[name]
 
-    def _policy(self):
+    def _policy(self) -> LayoutPolicy:
         """Return the write policy for the configured layout."""
         if self._layout is RegisterLayout.BASE:
             return BASE_POLICY
