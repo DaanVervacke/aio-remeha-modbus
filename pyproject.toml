@@ -58,7 +58,7 @@ fail_under = 95
 
 [tool.mypy]
 files = ["src"]
-python_version = "4.1.0"
+python_version = "3.14"
 strict = true
 
 [tool.ruff]
