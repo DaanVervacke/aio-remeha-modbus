@@ -57,11 +57,15 @@ jobs:
         id: run_pytest
         run: |
           uv run pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio_remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
+
       - name: Check for test failures
         if: ${{ failure() }}
         run: |
           echo ${{ steps.run_pytest.outcome }}
           exit 1
+
+      - name: Show sphinx warnings nicely in PR
+        uses: sphinx-doc/github-problem-matcher@master
 
       - name: Build docs
         run: uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html
