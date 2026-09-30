@@ -9,7 +9,7 @@ from modbus_connection.cli_helper import CountingUnit
 from modbus_connection.exceptions import IllegalDataAddressError
 from modbus_connection.mock import MockModbusUnit
 
-import query
+from aio_remeha_modbus import query
 from aio_remeha_modbus.gtw26.schedule import ComfortPeriod
 
 
