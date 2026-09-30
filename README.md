@@ -29,7 +29,7 @@ $ uv pip install dist/*.whl
 The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most important classes and their hierarchy is shown below.
 
 ## cli tool
-This library also includes a cli tool to query your Remeha appliance. After installing this library, you can use `remeha-query` or if you prefer, you can run it from the cli yourself using `python src/query.py`.
+This library also includes a cli tool to query your Remeha appliance. After installing this library, you can use `remeha-query` or if you prefer, you can run it from the cli yourself using `python -m aio_remeha_modbus.query`.
 
 ### Examples
 Query the 2nd zone of an appliance that uses an RTU over TCP connection at `192.168.1.2` and port 8899:
