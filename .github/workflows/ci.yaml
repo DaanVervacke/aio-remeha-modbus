@@ -56,6 +56,9 @@ jobs:
           set -o pipefail
           uv run --no-sync pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio_remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
 
+      - name: Show sphinx warnings nicely in PR
+        uses: sphinx-doc/github-problem-matcher@master
+
       - name: Build docs
         run: uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html
 

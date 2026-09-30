@@ -4,9 +4,20 @@
     {
       "label": "Sphinx: build docs",
       "type": "shell",
-      "command": "uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html",
+      "command": "uv run --group docs sphinx-build -W -b html docs/source docs/_build/html",
       "group": "build",
-      "problemMatcher": []
+      "problemMatcher": {
+        "owner": "sphinx-problem-matcher",
+        "pattern": [
+          {
+            "regexp": "^(.*):(\\d+):\\s+(\\w*):\\s+(.*)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          }
+        ]
+      }
     }
   ]
 }

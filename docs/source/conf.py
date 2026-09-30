@@ -2,6 +2,8 @@
 
 import sys
 from pathlib import Path
+from types import MappingProxyType
+from typing import Any
 
 from sphinx.application import Sphinx
 from sphinx.ext import apidoc
@@ -44,10 +46,40 @@ html_theme = "alabaster"
 def run_apidoc(_app: Sphinx) -> None:
     """Regenerate the API reference pages from the package source."""
 
-    apidoc.main(["--force", "--no-toc", "--separate", "--module-first", "-o", str(SOURCE_DIR / "api"), str(PACKAGE_DIR)])
+    apidoc.main([
+        "--force",
+        "--no-toc",
+        "--separate",
+        "--module-first",
+        "-o",
+        str(SOURCE_DIR / "api"),
+        str(PACKAGE_DIR),
+    ])
+
+
+def skip_member(
+    _app: Sphinx, obj_type, member_name: str, member_obj: Any, skip: bool, options: Any
+) -> bool | None:
+    """Skip certain members of classes that must be hidden from docs."""
+
+    from modbus_connection.model import CoilField, DiscreteInputField, RegisterField  # ruff: ignore[import-outside-top-level]
+    from typing_extensions import TypeForm  # ruff: ignore[import-outside-top-level]
+
+    modbus_field_type: TypeForm = RegisterField | CoilField | DiscreteInputField
+
+    if (
+        obj_type == "class"
+        and member_name == "declared_fields"
+        and isinstance(member_obj, MappingProxyType)
+        and all(isinstance(element, modbus_field_type) for element in member_obj.values())
+    ):
+        # Skip 'declared_fields' member that is statically filled in a Component class
+        return True
+    return skip
 
 
 def setup(app: Sphinx) -> None:
     """Register the apidoc hook."""
 
     app.connect("builder-inited", run_apidoc)
+    app.connect("autodoc-skip-member", skip_member)
