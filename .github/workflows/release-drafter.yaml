@@ -51,7 +51,7 @@ jobs:
 
       - name: Update version in required files
         run: |
-          sed -i "s/version = .*/version = \"${{ steps.version.outputs.py440_version }}\"/g" pyproject.toml
+          sed -i "s/^version = .*/version = \"${{ steps.version.outputs.py440_version }}\"/g" pyproject.toml
           sed -i "s/release = .*/release = \"${{ steps.version.outputs.py440_version }}\"/g" docs/source/conf.py
           sed -i "s/aio-remeha-modbus>=.*/aio-remeha-modbus>=${{ steps.version.outputs.py440_version }}/g" README.md
 
