@@ -48,8 +48,16 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
-      - name: Run check gate
-        run: uv run python -m scripts.check
+      - name: prek
+        run: uv run --no-sync prek run --all-files
+
+      - name: pytest
+        run: |
+          set -o pipefail
+          uv run --no-sync pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio_remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
+
+      - name: Build docs
+        run: uv run --group docs sphinx-build -W --keep-going -b html docs/source docs/_build/html
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v7
