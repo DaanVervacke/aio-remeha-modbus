@@ -75,20 +75,18 @@ class TimeOfDay:
 
         `TIME_OF_DAY` is a struct that is defined as follows:
 
-        ===============  ==============  ===========
-        Field            Type            Size (bits)
-        ===============  ==============  ===========
-        ``ms``           unsigned int    28
-        ``<padding>``    N/A             4
-        ``days``         unsigned int    16
-        ===============  ==============  ===========
+        Field        Type           Size (bits)
+        --------     -----------    -----------
+        ms           unsigned int   28
+        <padding>    N/A            4
+        days         unsigned int   16
 
-        * `TIME_OF_DAY.ms` is the amount of milliseconds since midnight
-        * `TIME_OF_DAY.days` is the amount of days since 1984-01-01.
+        Notes:
+            `TIME_OF_DAY.ms` is the amount of milliseconds since midnight.
+            `TIME_OF_DAY.days` is the amount of days since 1984-01-01.
 
-        **Notes**:
-          * This method assumes that naive `datetime` instances are in `time_zone`.
-          * This method assumes that the Remeha appliance operates in time zone `time_zone`.
+            This method assumes that naive `datetime` instances are in `time_zone`.
+            This method assumes that the Remeha appliance operates in time zone `time_zone`.
 
         Args:
           data (bytes): The encoded TIME_OF_DAY struct.
