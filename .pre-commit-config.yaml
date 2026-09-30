@@ -1,4 +1,4 @@
-exclude: "^(docs/|tests/|assets/|dist/|scripts/)"
+exclude: "^(docs/|assets/|dist/|scripts/)"
 
 repos:
   - repo: https://github.com/asottile/pyupgrade

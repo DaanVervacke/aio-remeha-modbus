@@ -221,5 +221,5 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]
+"tests/*" = ["D", "PLC2701"]
 "tests/gtw26/*" = ["D", "PLR0917", "PT006", "SLF001"]
