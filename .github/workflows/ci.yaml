@@ -51,6 +51,9 @@ jobs:
       - name: prek
         run: uv run --no-sync prek run --all-files
 
+      - name: mypy
+        run: uv run --no-sync mypy
+
       - name: pytest
         run: |
           set -o pipefail
