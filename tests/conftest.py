@@ -57,15 +57,18 @@ def update_raw_data(api: GTW08, data: tuple[int, int] | list[tuple[int, int]]):
         unit.holding[register] = value
 
 
+def load_modbus_store(unit: MockModbusUnit, file_name: str = "modbus_store.json") -> None:
+    """Load a recorded register store into the mock unit."""
+    store: dict[str, str] = json_fixture(file_name)["server"]["registers"]
+    unit.load_raw({"holding": {int(key): int(value, 16) for key, value in store.items()}})
+
+
 @pytest.fixture
 def remeha_modbus_unit(request, mock_modbus_unit: MockModbusUnit) -> ModbusUnit:
     """Load the contents of the `request.param` json fixture into the modbus unit."""
 
     json_file = request.param if hasattr(request, "param") else "modbus_store.json"
-    store: dict[str, str] = json_fixture(json_file)["server"]["registers"]
-    mock_modbus_unit.load_raw({
-        "holding": {int(key): int(value, 16) for key, value in store.items()}
-    })
+    load_modbus_store(mock_modbus_unit, json_file)
 
     return mock_modbus_unit
 
