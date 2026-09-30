@@ -3,13 +3,12 @@
 import datetime
 import logging
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Final, Self, cast
 
 from dateutil import parser
 
-from aio_remeha_modbus.gtw08.appliance import SeasonalMode
-from aio_remeha_modbus.gtw08.climate_zone import ClimateZoneScheduleId
 from aio_remeha_modbus.gtw08.const import (
     AUTO_SCHEDULE_MINIMAL_END_HOUR,
     BOILER_MAX_ALLOWED_HEAT_DURATION,
@@ -19,8 +18,10 @@ from aio_remeha_modbus.gtw08.const import (
     WATER_SPECIFIC_HEAT_CAPACITY_KJ,
     BoilerConfiguration,
     BoilerEnergyLabel,
+    ClimateZoneScheduleId,
     ForecastField,
     PVSystem,
+    SeasonalMode,
     UnitOfTemperature,
 )
 from aio_remeha_modbus.gtw08.errors import AutoSchedulingError
@@ -90,6 +91,24 @@ class WeatherForecast:
     """A list containing the hourly forecasts for the next 24 hours."""
 
 
+def _validate_forecast(weather_forecast: WeatherForecast) -> None:
+    """Raise `AutoSchedulingError` if the forecast cannot support a full-day schedule."""
+    if not weather_forecast.forecasts:
+        raise AutoSchedulingError(translation_key="auto_schedule_no_forecasts")
+
+    # We want to generate a planning for the next whole day, which must, to be useful,
+    # end no earlier than `AUTO_SCHEDULE_MINIMAL_END_HOUR`.
+    last_forecast: HourlyForecast = weather_forecast.forecasts[-1]
+    if last_forecast.start_time.hour < AUTO_SCHEDULE_MINIMAL_END_HOUR:
+        raise AutoSchedulingError(
+            translation_key="auto_schedule_forecast_not_enough_hours",
+            translation_placeholders={
+                "max_forecast_time": f"{last_forecast.start_time.hour}:00",
+                "min_required_end_time": f"{AUTO_SCHEDULE_MINIMAL_END_HOUR}:00",
+            },
+        )
+
+
 def generate_dhw_day_schedule(
     weather_forecast: WeatherForecast,
     pv_system: PVSystem,
@@ -113,20 +132,12 @@ def generate_dhw_day_schedule(
     """
     _LOGGER.info("Generating ZoneSchedule for tomorrow...")
 
-    if not weather_forecast.forecasts:
-        raise AutoSchedulingError(translation_key="auto_schedule_no_forecasts")
+    _validate_forecast(weather_forecast)
 
-    # We want to generate a planning for the next whole day, which must, to be useful,
-    # end no earlier than `AUTO_SCHEDULE_MINIMAL_END_HOUR`.
-    last_forecast: HourlyForecast = weather_forecast.forecasts[-1]
-    if last_forecast.start_time.hour < AUTO_SCHEDULE_MINIMAL_END_HOUR:
-        raise AutoSchedulingError(
-            translation_key="auto_schedule_forecast_not_enough_hours",
-            translation_placeholders={
-                "max_forecast_time": f"{last_forecast.start_time.hour}:00",
-                "min_required_end_time": f"{AUTO_SCHEDULE_MINIMAL_END_HOUR}:00",
-            },
-        )
+    # The boiler volume is not always reported by the appliance,
+    # and the kWh calculations below are meaningless without it.
+    if boiler_config.volume is None:
+        raise AutoSchedulingError(translation_key="auto_schedule_boiler_volume_unknown")
 
     # Calculate the amount of kWh required to heat to boiler to its setpoint, once
     # it reaches the heating threshold, round to two decimals.
@@ -134,11 +145,7 @@ def generate_dhw_day_schedule(
     default_required_heating_kwh: float = (
         math.ceil(
             (
-                (
-                    cast(float, boiler_config.volume)
-                    * WATER_SPECIFIC_HEAT_CAPACITY_KJ
-                    * cast(float, calorifier_hysteresis)
-                )
+                (boiler_config.volume * WATER_SPECIFIC_HEAT_CAPACITY_KJ * calorifier_hysteresis)
                 / 3600
             )
             * 100
@@ -167,7 +174,7 @@ def generate_dhw_day_schedule(
         if boiler_config.heat_loss_rate is not None
         else _energy_label_to_heat_loss_rate(
             label=cast(BoilerEnergyLabel, boiler_config.energy_label),
-            volume=cast(float, boiler_config.volume),
+            volume=boiler_config.volume,
         )
     )
 
@@ -237,7 +244,7 @@ def generate_dhw_day_schedule(
 
     # Generate rolling blocks of BOILER_MAX_ALLOWED_HEAT_DURATION hours which yield
     # enough kWh to heat the boiler up to its setpoint.
-    def _generate_acceptable_hour_blocks():
+    def _generate_acceptable_hour_blocks() -> Iterator[list[int]]:
         usable_hours_list = [hour for r in usable_hours for hour in r]
         for idx in range(len(usable_hours_list)):
             hours_subset: list[int] = (
@@ -279,7 +286,7 @@ def generate_dhw_day_schedule(
     ]
 
     # Generate the timeslots using the accepted hours yielding enough kWh.
-    def _generate_timeslots():
+    def _generate_timeslots() -> Iterator[Timeslot]:
         unaccepted_timeslots: list[Timeslot] = [
             Timeslot(
                 setpoint_type=TimeslotSetpointType.ECO,

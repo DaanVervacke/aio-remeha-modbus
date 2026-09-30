@@ -60,7 +60,7 @@ class DeviceBoardCategory:
     generation: int
     """The category generation"""
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Textual representation of this DeviceBoardCategory."""
 
         name: str
@@ -91,7 +91,7 @@ class DeviceBoardCategory:
 
         return False
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Return a hash of this device board category."""
 
         return hash(self.type)
@@ -182,7 +182,7 @@ class DeviceBoard(RemehaComponent):
 
         return False
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Return a hash of this device instance."""
         return hash(self.board_category)
 
@@ -205,7 +205,7 @@ class SystemDiscoveryTable(RemehaComponent):
     number_of_zones = uint8(address=189)
     """The number of zones present on the appliance."""
 
-    async def reset(self):
+    async def reset(self) -> None:
         """Reset the discovery table.
 
         This causes rediscovery of the appliance device boards, but does not change the

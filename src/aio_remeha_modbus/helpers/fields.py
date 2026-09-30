@@ -117,7 +117,10 @@ class NullableBinaryField(BinaryField):
             raise ValueError(f"nan_bytes requires a length of 2, got {len(nan_bytes)}")
 
     @override
-    def decode(self, words: list[int], scale_exponent: int | None = None) -> bytes | None:
+    # The NaN sentinel widens the supertype's bytes contract, which we cannot change.
+    def decode(  # type: ignore[override]
+        self, words: list[int], scale_exponent: int | None = None
+    ) -> bytes | None:
         decoded = super().decode(words=words, scale_exponent=scale_exponent)
 
         if decoded == self._nan_bytes:

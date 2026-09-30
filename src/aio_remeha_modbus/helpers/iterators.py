@@ -22,11 +22,17 @@ SOFTWARE.
 
 """
 
+from collections.abc import Callable, Iterable, Iterator
 from itertools import groupby
 from operator import itemgetter
+from typing import cast
 
 
-def consecutive_groups(iterable, ordering=lambda x: x):
+def consecutive_groups[T](
+    # The identity default assumes int-like items, as in the more-itertools original.
+    iterable: Iterable[T],
+    ordering: Callable[[T], int] = lambda x: cast(int, x),
+) -> Iterator[Iterator[T]]:
     """Yield groups of consecutive items using :func:`itertools.groupby`.
 
     *Attribution:*

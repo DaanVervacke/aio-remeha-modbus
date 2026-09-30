@@ -42,7 +42,7 @@ def _parse_zones(parser: argparse.ArgumentParser, args: argparse.Namespace) -> N
         args.zone = zones
         return
 
-    zones = []
+    zone_indices: list[int] = []
     for zone in raw_zones:
         try:
             index = int(zone)
@@ -50,8 +50,8 @@ def _parse_zones(parser: argparse.ArgumentParser, args: argparse.Namespace) -> N
             parser.error(f"invalid --zone {zone!r}: a gtw08 zone is a one-based index")
         if index < 1:
             parser.error(f"invalid --zone {index}: a gtw08 zone is a one-based index")
-        zones.append(index)
-    args.zone = zones
+        zone_indices.append(index)
+    args.zone = zone_indices
 
 
 # Flags only the named gateway reads, mirroring the two add_argument_group blocks.

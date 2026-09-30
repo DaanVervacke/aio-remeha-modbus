@@ -6,7 +6,9 @@ from typing import TypeVar
 T = TypeVar("T")
 
 
-def require_not_none[T](value: T, message: str = "Require a value, but got None", *args) -> T:
+def require_not_none[T](
+    value: T, message: str = "Require a value, but got None", *args: object
+) -> T:
     """Require a value to be not `None`.
 
     Args:
@@ -28,7 +30,7 @@ def require_not_none[T](value: T, message: str = "Require a value, but got None"
 def in_range(r: range) -> Callable[[int], int]:
     """Return a `Callable` which validates that a value is within a given range."""
 
-    def _validate(value: int):
+    def _validate(value: int) -> int:
         if value in r:
             return value
 

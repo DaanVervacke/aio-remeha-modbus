@@ -167,7 +167,7 @@ class GTW08(Device):
             )
             raise
 
-    async def _async_setup(self):
+    async def _async_setup(self) -> None:
         await self.discovery_table.async_update()
         await self.main_control_monitoring.async_update()
         await self.appliance.async_update()

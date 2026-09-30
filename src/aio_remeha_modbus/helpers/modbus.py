@@ -1,8 +1,7 @@
 """Modbus helper functions."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
-from types import CoroutineType
 from typing import Any, ParamSpec, TypeVar, cast, override
 
 from modbus_connection import ModbusUnit
@@ -42,7 +41,7 @@ P = ParamSpec("P")
 
 def retry_on_transient(
     max_tries: int = 3,
-) -> Callable[[Callable[P, CoroutineType[Any, Any, R]]], Callable[P, CoroutineType[Any, Any, R]]]:
+) -> Callable[[Callable[P, Coroutine[Any, Any, R]]], Callable[P, Coroutine[Any, Any, R]]]:
     """Retry function execution if a `TransientModbusError` occurs.
 
     Args:
@@ -53,11 +52,14 @@ def retry_on_transient(
     """
 
     def decorator(
-        coro: Callable[P, CoroutineType[Any, Any, R]],
-    ) -> Callable[P, CoroutineType[Any, Any, R]]:
+        coro: Callable[P, Coroutine[Any, Any, R]],
+    ) -> Callable[P, Coroutine[Any, Any, R]]:
 
         @wraps(coro)  # noqa: RET503
-        async def wrapped_fn(*args: P.args, **kwargs: P.kwargs) -> R:  # pyright: ignore[reportReturnType]
+        # The loop always returns or re-raises on its final iteration; mypy cannot prove it.
+        async def wrapped_fn(  # type: ignore[return]  # pyright: ignore[reportReturnType]
+            *args: P.args, **kwargs: P.kwargs
+        ) -> R:
             for i in range(max_tries):
                 try:
                     return await coro(*args, **kwargs)
@@ -72,7 +74,8 @@ def retry_on_transient(
                     else:
                         raise
 
-        return wrapped_fn
+        # functools.wraps types the result as _Wrapped, which mypy cannot assign back.
+        return cast(Callable[P, Coroutine[Any, Any, R]], wrapped_fn)
 
     return decorator
 

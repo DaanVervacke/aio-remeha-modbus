@@ -310,6 +310,15 @@ def test_generate_schedule_forecast_ends_too_early():
     }
 
 
+def test_generate_schedule_boiler_volume_unknown():
+    """Test that a boiler without a reported volume is refused."""
+
+    with pytest.raises(AutoSchedulingError) as exc_info:
+        _schedule(_forecast(), SeasonalMode.SUMMER, boiler=_boiler(volume=None))
+
+    assert exc_info.value.translation_key == "auto_schedule_boiler_volume_unknown"
+
+
 @freeze_time(_FROZEN_NOW)
 def test_generate_schedule_forecast_ends_at_minimal_hour():
     """Test that a forecast ending at the minimal end hour is accepted."""
