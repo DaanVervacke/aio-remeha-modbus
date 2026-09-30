@@ -51,6 +51,7 @@ docs = [
 ]
 
 [tool.coverage.run]
+branch = true
 omit = ["tests/*"]
 
 [tool.coverage.report]
