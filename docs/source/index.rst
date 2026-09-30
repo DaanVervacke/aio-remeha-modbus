@@ -1,15 +1,8 @@
-.. aio-remeha-modbus documentation master file, created by
-   sphinx-quickstart on Sat Jul 11 10:42:36 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 aio-remeha-modbus documentation
 ===============================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+`aio-remeha-modbus` is an async Python API for Remeha appliances. It supports the
+GTW-08 and GTW-26 Modbus gateways.
 
 .. toctree::
    :maxdepth: 2
