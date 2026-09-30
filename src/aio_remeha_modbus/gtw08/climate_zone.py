@@ -30,7 +30,7 @@ from aio_remeha_modbus.helpers.gtw08 import (
 from aio_remeha_modbus.helpers.validation import in_range
 
 if TYPE_CHECKING:
-    from aio_remeha_modbus.helpers.gtw08 import Timeslot
+    from aio_remeha_modbus.gtw08.time_program import Timeslot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class ClimateZoneHeatingMode(IntEnum):
 def _writable_schedule_id() -> Callable[[Any], Any]:
     """Validate the given `ClimateZoneScheduleId` for writing."""
 
-    def _validate(value: ClimateZoneScheduleId):
+    def _validate(value: ClimateZoneScheduleId) -> ClimateZoneScheduleId:
         if value == ClimateZoneScheduleId.SCHEDULE_4:
             raise TypeError(f"Schedule {ClimateZoneScheduleId.SCHEDULE_4.name} is not writable")
 
@@ -586,12 +586,12 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             cast(ClimateZoneType, self.type), cast(ClimateZoneFunction, self.function)
         )
 
-    async def async_set_mode(self, mode: ClimateZoneMode):
+    async def async_set_mode(self, mode: ClimateZoneMode) -> None:
         """Set the mode of this zone."""
 
         await self.write("mode", mode)
 
-    async def async_set_current_setpoint(self, setpoint: float):
+    async def async_set_current_setpoint(self, setpoint: float) -> None:
         """Set the current setpoint of this zone.
 
         Args:
@@ -638,57 +638,57 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 "Setting setpoint not supported for climate zones of type %s", self.type
             )
 
-    async def async_set_room_setpoint_1(self, value: float):
+    async def async_set_room_setpoint_1(self, value: float) -> None:
         """Write the `ECO` room setpoint for heating."""
 
         await self.write("room_setpoint_1", value)
 
-    async def async_set_room_setpoint_2(self, value: float):
+    async def async_set_room_setpoint_2(self, value: float) -> None:
         """Write the `COMFORT` room setpoint for heating."""
 
         await self.write("room_setpoint_2", value)
 
-    async def async_set_room_setpoint_3(self, value: float):
+    async def async_set_room_setpoint_3(self, value: float) -> None:
         """Write the `AWAY` room setpoint for heating."""
 
         await self.write("room_setpoint_3", value)
 
-    async def async_set_room_setpoint_4(self, value: float):
+    async def async_set_room_setpoint_4(self, value: float) -> None:
         """Write the `MORNING` room setpoint for heating."""
 
         await self.write("room_setpoint_4", value)
 
-    async def async_set_room_setpoint_5(self, value: float):
+    async def async_set_room_setpoint_5(self, value: float) -> None:
         """Write the `EVENING` room setpoint for heating."""
 
         await self.write("room_setpoint_5", value)
 
-    async def async_set_room_cooling_setpoint_1(self, value: float):
+    async def async_set_room_cooling_setpoint_1(self, value: float) -> None:
         """Write the `ECO` room setpoint."""
 
         await self.write("room_cooling_setpoint_1", value)
 
-    async def async_set_room_cooling_setpoint_2(self, value: float):
+    async def async_set_room_cooling_setpoint_2(self, value: float) -> None:
         """Write the `COMFORT` room setpoint."""
 
         await self.write("room_cooling_setpoint_2", value)
 
-    async def async_set_room_cooling_setpoint_3(self, value: float):
+    async def async_set_room_cooling_setpoint_3(self, value: float) -> None:
         """Write the `AWAY` room setpoint."""
 
         await self.write("room_cooling_setpoint_3", value)
 
-    async def async_set_room_cooling_setpoint_4(self, value: float):
+    async def async_set_room_cooling_setpoint_4(self, value: float) -> None:
         """Write the `MORNING` room setpoint."""
 
         await self.write("room_cooling_setpoint_4", value)
 
-    async def async_set_room_cooling_setpoint_5(self, value: float):
+    async def async_set_room_cooling_setpoint_5(self, value: float) -> None:
         """Write the `EVENING` room setpoint."""
 
         await self.write("room_cooling_setpoint_5", value)
 
-    async def async_set_dhw_calorifier_hysteresis(self, value: float):
+    async def async_set_dhw_calorifier_hysteresis(self, value: float) -> None:
         """Write the DHW Calorifier Hysteresis.
 
         Args:
@@ -698,7 +698,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("dhw_calorifier_hysteresis", value)
 
-    async def async_set_selected_schedule(self, value: ClimateZoneScheduleId):
+    async def async_set_selected_schedule(self, value: ClimateZoneScheduleId) -> None:
         """Write the selected schedule.
 
         Only schedules 1-3 can be written. If schedule 4 is provided,
@@ -718,7 +718,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
     async def async_set_current_schedule(
         self, schedule_id: ClimateZoneScheduleId, schedule: dict[Weekday, list[Timeslot] | None]
-    ):
+    ) -> None:
         """Write a full schedule.
 
         Setting the current schedule also updates `selected_schedule` to `schedule_id`.
@@ -757,7 +757,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         else:
             raise RemehaApiError("schedule_write_not_supported")
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Compare this `ClimateZone` with another for equality.
 
         For equality, only the properties ``id``, ``type`` and ``function`` are considered.

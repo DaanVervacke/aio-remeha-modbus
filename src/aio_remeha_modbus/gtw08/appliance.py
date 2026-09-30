@@ -445,7 +445,7 @@ class Appliance(RemehaComponent):
             SeasonalMode.SUMMER,
         }
 
-    async def async_set_summer_winter(self, temperature: float):
+    async def async_set_summer_winter(self, temperature: float) -> None:
         """Set the outdoor temperature upper limit for heating.
 
         Args:
@@ -455,7 +455,7 @@ class Appliance(RemehaComponent):
 
         await self.write("summer_winter", temperature)
 
-    async def async_set_neutral_band_summer_winter(self, bandwidth: float):
+    async def async_set_neutral_band_summer_winter(self, bandwidth: float) -> None:
         """Set the neutral band in which the heat pump is deactivated.
 
         Args:
@@ -465,17 +465,17 @@ class Appliance(RemehaComponent):
 
         await self.write("neutral_band_summer_winter", bandwidth)
 
-    async def async_enable_forced_summer_mode(self):
+    async def async_enable_forced_summer_mode(self) -> None:
         """Stop heating, maintain hot water. Force summer mode."""
 
         await self.write("forced_summer_mode", True)
 
-    async def async_disable_forced_summer_mode(self):
+    async def async_disable_forced_summer_mode(self) -> None:
         """Do not force summer mode."""
 
         await self.write("forced_summer_mode", False)
 
-    async def async_set_silent_mode(self, value: SilentMode):
+    async def async_set_silent_mode(self, value: SilentMode) -> None:
         """Set the silent mode level.
 
         Args:
@@ -484,7 +484,7 @@ class Appliance(RemehaComponent):
         """
         await self.write("silent_mode", value)
 
-    async def async_set_silent_mode_start_time(self, start_time: time):
+    async def async_set_silent_mode_start_time(self, start_time: time) -> None:
         """Set the time of day at which the silent mode starts.
 
         Args:
@@ -493,7 +493,7 @@ class Appliance(RemehaComponent):
         """
         await self.write("silent_mode_start_time", start_time)
 
-    async def async_set_silent_mode_end_time(self, end_time: time):
+    async def async_set_silent_mode_end_time(self, end_time: time) -> None:
         """Set the time of day at which the silent mode ends.
 
         Args:
@@ -502,15 +502,15 @@ class Appliance(RemehaComponent):
         """
         await self.write("silent_mode_end_time", end_time)
 
-    async def async_set_ch_enabled(self):
+    async def async_set_ch_enabled(self) -> None:
         """Enable central heat demand processing."""
         await self.write("ch_enabled", True)
 
-    async def async_set_ch_disabled(self):
+    async def async_set_ch_disabled(self) -> None:
         """Disable central heat demand processing."""
         await self.write("ch_enabled", False)
 
-    async def async_set_cooling_type(self, value: CoolingType):
+    async def async_set_cooling_type(self, value: CoolingType) -> None:
         """Set the type of cooling for this appliance.
 
         Args:
@@ -519,12 +519,12 @@ class Appliance(RemehaComponent):
         """
         await self.write("cooling_type", value)
 
-    async def async_enable_forced_cooling_mode(self):
+    async def async_enable_forced_cooling_mode(self) -> None:
         """Enable forced cooling mode."""
 
         await self.write("forced_cooling_mode", True)
 
-    async def async_disable_forced_cooling_mode(self):
+    async def async_disable_forced_cooling_mode(self) -> None:
         """Disable forced cooling mode."""
 
         await self.write("forced_cooling_mode", False)

@@ -1,5 +1,6 @@
 """Modbus components related to climate zone time programs."""
 
+from collections.abc import Iterator
 from datetime import time
 from enum import IntEnum
 from typing import Self, override
@@ -75,14 +76,14 @@ class Timeslot:
             + time_steps.to_bytes()
         )
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         """Compare this `Timeslot` to another."""
         if isinstance(other, Timeslot):
             return self.switch_time < other.switch_time
 
         return False
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a human-readable representation of this time slot."""
         return f"Timeslot(setpoint_type={self.setpoint_type.name}, activity={self.activity.name}, switch_time={self.switch_time})"
 
@@ -173,7 +174,7 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
 
         no_of_slots: int = int.from_bytes(schedule_bytes[0:1])
 
-        def _decode_timeslots():
+        def _decode_timeslots() -> Iterator[Timeslot | None]:
             for slot_index in range(
                 1, no_of_slots * REMEHA_TIME_PROGRAM_SLOT_SIZE, REMEHA_TIME_PROGRAM_SLOT_SIZE
             ):
