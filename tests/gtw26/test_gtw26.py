@@ -103,8 +103,9 @@ class TestAutoSetup:
     """Tests for the auto-setup path."""
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_setup_detects_base_layout_when_not_provided(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that _async_setup detects BASE layout when layout is None."""
         _seed(mock_modbus_unit)
@@ -120,8 +121,9 @@ class TestAutoSetup:
         assert device._setup_complete is True
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_setup_detects_isystem_layout_when_not_provided(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that _async_setup detects ISYSTEM layout when layout is None."""
         _seed_isystem(mock_modbus_unit)
@@ -134,8 +136,9 @@ class TestAutoSetup:
         assert device._setup_complete is True
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_setup_uses_provided_layout_and_generation(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that _async_setup uses provided layout and generation."""
         device = GTW26(
@@ -151,8 +154,9 @@ class TestAutoSetup:
         assert device._setup_complete is True
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_configured_message_spacing_survives_auto_detection(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that a caller-configured spacing is not reset by detection."""
         _seed_isystem(mock_modbus_unit)
@@ -163,8 +167,9 @@ class TestAutoSetup:
         assert mock_modbus_unit.message_spacing == 0.5
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_detect_applies_requested_message_spacing(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that detection constructs its device with the given spacing."""
         _seed_isystem(mock_modbus_unit)
@@ -176,8 +181,9 @@ class TestAutoSetup:
         assert detection.device._message_spacing_seconds == 0.5
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_setup_does_not_probe_when_layout_and_generation_known(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that a fully configured device sets up without identity probes."""
         device = GTW26(
@@ -192,8 +198,9 @@ class TestAutoSetup:
         assert mock_modbus_unit.read_events == []
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_isystem_setup_treats_missing_generation_as_terminal(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that an iSystem device without a generation never probes identity."""
         _seed_isystem(mock_modbus_unit)
@@ -205,8 +212,9 @@ class TestAutoSetup:
         assert mock_modbus_unit.read_events == []
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_base_setup_without_generation_probes_only_base_identity(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that a base device without a generation skips the iSystem probe."""
         _seed(mock_modbus_unit)
@@ -226,8 +234,8 @@ class TestAutoSetup:
         ],
     )
     @pytest.mark.asyncio
+    @staticmethod
     async def test_base_setup_without_generation_raises_on_unmapped_type_code(
-        self,
         mock_modbus_unit: MockModbusUnit,
         type_code: int,
         failure_reason: DetectionFailureReason,
@@ -244,7 +252,8 @@ class TestAutoSetup:
         assert caught.value.detection.failure_reason is failure_reason
 
     @pytest.mark.asyncio
-    async def test_async_setup_only_detects_once(self, mock_modbus_unit: MockModbusUnit) -> None:
+    @staticmethod
+    async def test_async_setup_only_detects_once(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that _async_setup only calls detect once."""
         _seed(mock_modbus_unit)
         mock_modbus_unit.fail_read(600, IllegalDataAddressError())
@@ -264,9 +273,8 @@ class TestAutoSetup:
         assert call_count_after == call_count_before
 
     @pytest.mark.asyncio
-    async def test_async_ensure_setup_calls_setup_once(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    @staticmethod
+    async def test_async_ensure_setup_calls_setup_once(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that async_ensure_setup only calls _async_setup once."""
         _seed(mock_modbus_unit)
         mock_modbus_unit.fail_read(600, IllegalDataAddressError())
@@ -285,8 +293,9 @@ class TestAutoSetup:
         mock_setup_func.assert_called_once()
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_ensure_setup_handles_concurrent_calls(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that async_ensure_setup handles concurrent calls correctly."""
         _seed(mock_modbus_unit)
@@ -340,8 +349,8 @@ class TestProperties:
 
     @pytest.mark.parametrize(("layout", "zone", "blank", "sensor_address"), _ZONE_CASES)
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_present_with_sensor(
-        self,
         mock_modbus_unit: MockModbusUnit,
         gtw26: LayoutGtw26Factory,
         layout: RegisterLayout,
@@ -359,8 +368,8 @@ class TestProperties:
 
     @pytest.mark.parametrize(("layout", "zone", "blank", "sensor_address"), _ZONE_CASES)
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_absent_without_sensor_or_force(
-        self,
         mock_modbus_unit: MockModbusUnit,
         gtw26: LayoutGtw26Factory,
         layout: RegisterLayout,
@@ -384,8 +393,8 @@ class TestProperties:
         ],
     )
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_present_when_forced(
-        self,
         mock_modbus_unit: MockModbusUnit,
         gtw26: LayoutGtw26Factory,
         layout: RegisterLayout,
@@ -398,8 +407,9 @@ class TestProperties:
         assert getattr(device, f"zone_{zone}_present") is True
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_c_absent_on_base_layout(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Zone C does not exist on the base layout."""
         device = await base_gtw26(mock_modbus_unit)
@@ -407,8 +417,8 @@ class TestProperties:
         assert device.zone_c_present is False
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_hot_water_presence_follows_temperature_isystem(
-        self,
         mock_modbus_unit: MockModbusUnit,
         isystem_gtw26: Gtw26Factory,
     ) -> None:
@@ -433,8 +443,8 @@ class TestProperties:
         ],
     )
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_present_without_zone_component(
-        self,
         mock_modbus_unit: MockModbusUnit,
         zone: str,
         force_kwargs: dict[str, bool],
@@ -448,8 +458,8 @@ class TestProperties:
         assert getattr(device, f"zone_{zone.lower()}_present") is expected
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_zone_c_present_without_zone_component_isystem(
-        self,
         mock_modbus_unit: MockModbusUnit,
         isystem_gtw26: Gtw26Factory,
     ) -> None:
@@ -460,8 +470,8 @@ class TestProperties:
         assert device.zone_c_present is False
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_hot_water_present_without_hot_water_component(
-        self,
         mock_modbus_unit: MockModbusUnit,
         base_gtw26: Gtw26Factory,
     ) -> None:
@@ -475,14 +485,16 @@ class TestProperties:
 class TestConstructor:
     """Tests for constructor-applied unit requirements."""
 
-    def test_request_timeout_is_required_on_unit(self, mock_modbus_unit: MockModbusUnit) -> None:
+    @staticmethod
+    def test_request_timeout_is_required_on_unit(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that request_timeout is forwarded to the unit."""
         GTW26("test", mock_modbus_unit, request_timeout=3.0)
 
         assert mock_modbus_unit.required_timeout == 3.0
 
+    @staticmethod
     def test_without_request_timeout_the_unit_keeps_its_own(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that the constructor leaves the unit timeout unchanged by default."""
         GTW26("test", mock_modbus_unit)
@@ -494,8 +506,9 @@ class TestReadRegisters:
     """Tests for async_read_registers method."""
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_single_register(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test reading a single register."""
         _seed(mock_modbus_unit)
@@ -508,8 +521,9 @@ class TestReadRegisters:
         assert result == (24,)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_default_format_is_big_endian(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that the default struct format decodes big-endian register words."""
         _seed(mock_modbus_unit)
@@ -521,8 +535,9 @@ class TestReadRegisters:
         assert result == (24,)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_multiple_registers(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test reading multiple registers."""
         _seed(mock_modbus_unit)
@@ -534,8 +549,9 @@ class TestReadRegisters:
         assert result == (24, 0)  # 457=24, 458=0 (not set)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_with_struct_format(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test reading registers with a specific struct format."""
         _seed(mock_modbus_unit)
@@ -548,8 +564,9 @@ class TestReadRegisters:
         assert result == (24,)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_rejects_zero_count(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that read_registers rejects count < 1."""
         device = await base_gtw26(mock_modbus_unit)
@@ -558,8 +575,9 @@ class TestReadRegisters:
             await device.async_read_registers(457, count=0)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_read_registers_rejects_excessive_count(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that read_registers rejects count > GTW26_MAX_SPAN (125)."""
         device = await base_gtw26(mock_modbus_unit)
@@ -572,8 +590,9 @@ class TestNudgePanel:
     """Tests for the _nudge_panel mechanism."""
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_nudge_panel_writes_to_panel_nudge_register(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel writes to the panel nudge register."""
         device = await base_gtw26(mock_modbus_unit)
@@ -589,8 +608,9 @@ class TestNudgePanel:
         assert [(event.address, event.values) for event in writes] == [(13, [1]), (13, [0])]
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_nudge_panel_called_after_heating_mode_write_gen4(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel is called after heating mode write for Gen4."""
         device = await base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
@@ -601,8 +621,9 @@ class TestNudgePanel:
         mock_nudge.assert_called_once()
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_nudge_panel_not_called_for_gen3(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel is not called for Gen3."""
         device = await base_gtw26(mock_modbus_unit)
@@ -613,8 +634,9 @@ class TestNudgePanel:
         mock_nudge.assert_not_called()
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_nudge_panel_called_after_hot_water_mode_write_gen4(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _nudge_panel is called after hot water mode write for Gen4."""
         device = await base_gtw26(mock_modbus_unit, variant=ControllerGeneration.GENERATION_4)
@@ -629,8 +651,9 @@ class TestErrorPaths:
     """Tests for error handling paths."""
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_update_raises_connection_error(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that async_update raises ModbusConnectionError."""
         device = await base_gtw26(mock_modbus_unit)
@@ -640,9 +663,8 @@ class TestErrorPaths:
             await device.async_update()
 
     @pytest.mark.asyncio
-    async def test_policy_raises_when_layout_not_set(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    @staticmethod
+    async def test_policy_raises_when_layout_not_set(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that _policy raises RemehaApiError when layout is not set."""
         device = GTW26("test", mock_modbus_unit)
         device._layout = None
@@ -653,8 +675,9 @@ class TestErrorPaths:
         assert exc_info.value.translation_key == "layout_not_set_up"
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_async_setup_with_no_pool_does_not_fail(
-        self, mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
+        mock_modbus_unit: MockModbusUnit, base_gtw26: Gtw26Factory
     ) -> None:
         """Test that _poll_group handles None pool gracefully."""
         device = await base_gtw26(mock_modbus_unit)
@@ -671,13 +694,15 @@ class TestErrorPaths:
 class TestStaticProperties:
     """Tests for static properties."""
 
-    def test_name_property(self, mock_modbus_unit: MockModbusUnit) -> None:
+    @staticmethod
+    def test_name_property(mock_modbus_unit: MockModbusUnit) -> None:
         """Test the name property."""
         device = GTW26("my_device", mock_modbus_unit)
 
         assert device.name == "my_device"
 
-    def test_layout_property(self, mock_modbus_unit: MockModbusUnit) -> None:
+    @staticmethod
+    def test_layout_property(mock_modbus_unit: MockModbusUnit) -> None:
         """Test the layout property."""
         device = GTW26(
             "test",
@@ -687,7 +712,8 @@ class TestStaticProperties:
 
         assert device.layout is RegisterLayout.BASE
 
-    def test_generation_property(self, mock_modbus_unit: MockModbusUnit) -> None:
+    @staticmethod
+    def test_generation_property(mock_modbus_unit: MockModbusUnit) -> None:
         """Test the generation property."""
         device = GTW26(
             "test",

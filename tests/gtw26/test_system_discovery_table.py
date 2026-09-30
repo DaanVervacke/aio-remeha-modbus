@@ -180,7 +180,9 @@ async def test_probe_raises_probe_error_on_failed_detection(mock_modbus_unit: Mo
 
 
 @pytest.mark.asyncio
-async def test_facade_setup_raises_probe_error_on_failed_detection(mock_modbus_unit: MockModbusUnit):
+async def test_facade_setup_raises_probe_error_on_failed_detection(
+    mock_modbus_unit: MockModbusUnit,
+):
     mock_modbus_unit.fail_read(3, IllegalDataAddressError())
     mock_modbus_unit.fail_read(108, IllegalDataAddressError())
     mock_modbus_unit.fail_read(457, IllegalDataAddressError())

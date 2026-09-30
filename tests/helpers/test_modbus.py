@@ -29,7 +29,7 @@ async def test_async_retry():
 
             return 42
         finally:
-            attempts["test_retries"] = attempts["test_retries"] + 1
+            attempts["test_retries"] += 1
 
     # IllegalDataValueError is in TransientModbusError so must be retried.
     assert await test_retries() == 42
@@ -43,7 +43,7 @@ async def test_async_retry():
 
             return 42
         finally:
-            attempts["test_raises"] = attempts["test_raises"] + 1
+            attempts["test_raises"] += 1
 
     # IllegalFunctionError is not in TransientModbusError so must not be retried.
     with pytest.raises(

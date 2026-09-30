@@ -24,9 +24,8 @@ class TestGtw26ComponentWrite:
     """Tests for Gtw26Component.write() method."""
 
     @pytest.mark.asyncio
-    async def test_write_register_field_calls_parent(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    @staticmethod
+    async def test_write_register_field_calls_parent(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that write calls the parent class write method."""
         component = MockGtw26Component(mock_modbus_unit)
 
@@ -41,8 +40,9 @@ class TestGtw26ComponentWrite:
             mock_parent_write.assert_called_once_with(field="test_register", value=42.0)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_write_register_field_retains_value_in_values(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that writing a register field retains the value in _values."""
         component = MockGtw26Component(mock_modbus_unit)
@@ -53,8 +53,9 @@ class TestGtw26ComponentWrite:
         assert component._values["test_register"] == 42
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_write_register_field_retains_validator_coerced_value(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that a clamping write retains the effective value, not the request."""
         component = MockGtw26Component(mock_modbus_unit)
@@ -66,9 +67,8 @@ class TestGtw26ComponentWrite:
         assert component._values["clamped_register"] == 15
 
     @pytest.mark.asyncio
-    async def test_write_bit_field_retains_value_in_bits(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    @staticmethod
+    async def test_write_bit_field_retains_value_in_bits(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that writing a bit field retains the value in _bits."""
         component = MockGtw26Component(mock_modbus_unit)
         component._bit_fields = {"test_bit": 200}
@@ -80,8 +80,9 @@ class TestGtw26ComponentWrite:
         assert component._bits["test_bit"] is True
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_write_unknown_field_raises_attribute_error(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that writing an unknown field raises AttributeError."""
         component = MockGtw26Component(mock_modbus_unit)
@@ -90,8 +91,9 @@ class TestGtw26ComponentWrite:
             await component.write("unknown_field", 42)
 
     @pytest.mark.asyncio
+    @staticmethod
     async def test_write_read_only_field_raises_attribute_error(
-        self, mock_modbus_unit: MockModbusUnit
+        mock_modbus_unit: MockModbusUnit,
     ) -> None:
         """Test that writing a read-only field raises AttributeError."""
         component = MockGtw26Component(mock_modbus_unit)
@@ -100,9 +102,8 @@ class TestGtw26ComponentWrite:
             await component.write("test_register", 42)
 
     @pytest.mark.asyncio
-    async def test_write_invalid_value_raises_value_error(
-        self, mock_modbus_unit: MockModbusUnit
-    ) -> None:
+    @staticmethod
+    async def test_write_invalid_value_raises_value_error(mock_modbus_unit: MockModbusUnit) -> None:
         """Test that writing an invalid value raises ValueError."""
         component = MockGtw26Component(mock_modbus_unit)
 
@@ -111,8 +112,9 @@ class TestGtw26ComponentWrite:
 
     @pytest.mark.parametrize("value", [-1, 16, 40])
     @pytest.mark.asyncio
+    @staticmethod
     async def test_rejected_write_raises_before_io(
-        self, mock_modbus_unit: MockModbusUnit, value: int
+        mock_modbus_unit: MockModbusUnit, value: int
     ) -> None:
         """Test that an out-of-range write raises before any Modbus I/O."""
         component = MockGtw26Component(mock_modbus_unit)
