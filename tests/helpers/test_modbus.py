@@ -54,6 +54,23 @@ async def test_async_retry():
     assert attempts["test_raises"] == 1
 
 
+@pytest.mark.parametrize(
+    "max_tries",
+    [
+        pytest.param(0, id="zero"),
+        pytest.param(-1, id="negative"),
+    ],
+)
+def test_retry_on_transient_rejects_invalid_max_tries(max_tries: int):
+    """Test that a non-positive `max_tries` is refused at decoration time."""
+
+    with pytest.raises(ValueError, match="max_tries must be at least 1"):
+
+        @retry_on_transient(max_tries)
+        async def never_called() -> int:
+            return 42
+
+
 @pytest.mark.asyncio
 async def test_retry_on_transient_gives_up_after_max_tries():
     """Test that the transient exception is re-raised after `max_tries` attempts."""

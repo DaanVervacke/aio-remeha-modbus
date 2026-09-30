@@ -49,14 +49,19 @@ def retry_on_transient(
 
     The function is executed at most `max_tries`, after which the exception will be re-raised.
 
+    Raises:
+        ValueError: If `max_tries` is less than 1.
+
     """
+    if max_tries < 1:
+        raise ValueError(f"max_tries must be at least 1, got {max_tries}")
 
     def decorator(
         coro: Callable[P, Coroutine[Any, Any, R]],
     ) -> Callable[P, Coroutine[Any, Any, R]]:
 
         @wraps(coro)  # noqa: RET503
-        # The loop always returns or re-raises on its final iteration; mypy cannot prove it.
+        # max_tries is validated >= 1, so the loop always returns or re-raises; mypy cannot prove it.
         async def wrapped_fn(  # type: ignore[return]  # pyright: ignore[reportReturnType]
             *args: P.args, **kwargs: P.kwargs
         ) -> R:
