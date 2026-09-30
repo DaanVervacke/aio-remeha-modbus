@@ -124,10 +124,14 @@ def generate_dhw_day_schedule(
         boiler_config (BoilerConfiguration): The DHW boiler configuration.
         calorifier_hysteresis (float): The amount of degrees C the boiler can cool down
             below the setpoint before heating restarts.
-        appliance_seasonal_mode (SeasonalMode): The current seasonal mode of the appliance.
+        appliance_seasonal_mode (SeasonalMode | None): The current seasonal mode of the appliance.
 
     Returns:
         The generated `ZoneSchedule`.
+
+    Raises:
+        AutoSchedulingError: If the forecast is empty or ends too early to support a
+            full-day schedule, or if the boiler volume is unknown.
 
     """
     _LOGGER.info("Generating ZoneSchedule for tomorrow...")
