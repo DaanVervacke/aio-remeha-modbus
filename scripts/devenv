@@ -4,9 +4,10 @@ workspace_folder=${1}
 
 if [ ! -d "${workspace_folder}/.venv" ]; then
   uv venv
+  uv sync --locked --all-extras --dev
 else
   echo "Using existing venv at .venv"
   source ${workspace_folder}/.venv/bin/activate
 fi
 
-pre-commit install
+prek install
